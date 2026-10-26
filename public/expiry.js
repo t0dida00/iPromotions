@@ -304,8 +304,34 @@ function renderCount() {
   badge.title = `${n} upcoming date${n === 1 ? '' : 's'}`;
 }
 
+// Dashboard: the next few dates, read-only, above the crawler status. Only when signed in with
+// dates coming up; editing stays on the Follow page.
+const DASH_UPCOMING = 5;
+function renderDashUpcoming() {
+  const box = document.getElementById('dash-upcoming');
+  if (!box) return;
+  const next = user && entries ? entries.filter((e) => daysUntil(e.date) >= 0).sort((a, b) => a.date.localeCompare(b.date)) : [];
+  box.hidden = !next.length;
+  if (!next.length) return (box.innerHTML = '');
+  box.innerHTML = `<div class="follow-card">
+    <div class="cal-head">
+      <h2>Upcoming</h2>
+      <a class="btn btn-sm" href="/follow" data-view-link>${next.length > DASH_UPCOMING ? `See all ${next.length}` : 'Open Follow discounts'} →</a>
+    </div>
+    <ul class="upcoming dash-up">${next.slice(0, DASH_UPCOMING).map((e) => {
+      const n = daysUntil(e.date);
+      return `<li class="${n === 0 ? 'today' : n === 1 ? 'soon' : ''}">
+        <span class="up-when"><b>${relative(e.date)}</b><span>${esc(fmtDay(e.date))}</span></span>
+        <span class="up-what"><b class="dash-up-name">${esc(e.product)}</b>${e.location ? `<span class="dash-up-loc">${esc(e.location)}</span>` : ''}</span>
+        <span class="chip ${e.kind}">${KIND[e.kind]}</span>
+      </li>`;
+    }).join('')}</ul>
+  </div>`;
+}
+
 function render() {
   renderCount();
+  renderDashUpcoming();
   if (!root) return;
   const body = root.querySelector('#follow');
   if (!user) {
@@ -317,7 +343,8 @@ function render() {
     </div>`;
     return;
   }
-  body.innerHTML = `${photoCard()}<div class="follow-split">${calendarCard()}${upcomingCard()}</div>`;
+  // Upcoming first: the dates coming up are what people open this page for.
+  body.innerHTML = `${upcomingCard()}${photoCard()}${calendarCard()}`;
 }
 
 function photoCard() {

@@ -349,18 +349,7 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 
 .cal-nav { display: flex; gap: 6px; align-items: center; }
 /* Compact calendar on the left, Upcoming beside it; stacked on narrow screens. */
-.follow-split { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; align-items: start; }
-.follow-split .cal-head h2 { font-size: 16px; }
-.follow-split .cal-day { min-height: 0; aspect-ratio: 1; padding: 3px; gap: 2px; align-items: center; }
-.follow-split .cal-num { font-size: 12px; }
-.follow-split .cal-day .chip { width: 6px; height: 6px; padding: 0; border-radius: 50%; font-size: 0; display: inline-block; }
-.follow-split .cal-day .chip.use_by { background: #c62f52; }
-.follow-split .cal-day .chip.best_before { background: #d99a00; }
-.follow-split .cal-day .chip.more { display: none; }
 .cal-dots { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
-@media (max-width: 900px) {
-  .follow-split { grid-template-columns: minmax(0, 1fr); }
-}
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cal-wd { color: var(--muted); font-size: 12px; font-weight: 600; text-align: center; padding-bottom: 2px; }
 .cal-day { min-height: 82px; padding: 4px; border-radius: 8px; background: var(--bg); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -499,3 +488,11 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .credits-line b { color: var(--text); }
 .credits-line a { color: var(--accent); font-weight: 600; }
 .follow-actions a.btn { text-decoration: none; }
+
+/* Dashboard: next expiry dates (read-only) above the crawler status. */
+.dash-upcoming { padding-top: 20px; }
+.dash-up li { grid-template-columns: 112px minmax(0, 1fr) auto; }
+.dash-up .up-what { display: flex; flex-direction: column; min-width: 0; }
+.dash-up-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-up-loc { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-upcoming .cal-head a.btn { text-decoration: none; }
