@@ -44,23 +44,31 @@ npm run crawl      # one-off crawl from the terminal
 | Wolt lookups | Vercel function | Chromium from `@sparticuz/chromium`; results cached per area in the database |
 
 One-time setup:
-1. **Neon** (neon.tech): create a project, copy the **pooled** connection string
-   (`…-pooler…/neondb?sslmode=require`).
-2. Copy today's data in: `DATABASE_URL='<neon url>' node scripts/import-data.js`.
-3. **GitHub token** (Settings → Developer settings → Fine-grained tokens): only this repository,
+1. **Vercel** → Add New Project → import `t0dida00/iPromotions` (or `vercel link`). Functions run
+   in `fra1` (Frankfurt, `vercel.json`), close to Oulu and to the database.
+2. **Neon** from the Vercel Marketplace (Storage → Neon, region **Frankfurt / aws-eu-central-1**):
+   it adds `DATABASE_URL` (pooled) to the project's environment variables.
+3. Copy today's data in: `vercel env pull .env.production.local`, then
+   `node --env-file=.env.production.local scripts/import-data.js` (deals, status, caches and
+   expiry dates).
+4. **GitHub token** (Settings → Developer settings → Fine-grained tokens): only this repository,
    permission **Actions: Read and write**.
-4. **Vercel** → Add New Project → import `t0dida00/iPromotions` → Environment Variables:
-   `DATA_STORE=postgres`, `DATABASE_URL`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`,
+5. **Vercel environment variables**: `DATA_STORE=postgres`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`,
    `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID`, `OWNER_EMAIL`, `NUXT_HF_TOKEN`, `NUXT_HF_MODEL`,
-   `NUXT_HF_VISION_MODEL` (if used), `GITHUB_TOKEN`, `GITHUB_REPO=t0dida00/iPromotions` → Deploy.
-5. **GitHub repo → Settings → Secrets and variables → Actions**: `DATABASE_URL`, `NUXT_HF_TOKEN`,
+   `NUXT_HF_VISION_MODEL` (if used), `GITHUB_TOKEN`, `GITHUB_REPO=t0dida00/iPromotions` → Redeploy.
+6. **GitHub repo → Settings → Secrets and variables → Actions**: `DATABASE_URL`, `NUXT_HF_TOKEN`,
    `NUXT_HF_MODEL`.
-6. **Firebase console → Authentication → Settings → Authorized domains**: add your
+7. **Firebase console → Authentication → Settings → Authorized domains**: add your
    `<project>.vercel.app` domain, or Google sign-in fails there.
-7. Actions tab → "Crawl stores" → Run workflow, to check the crawler can write to Neon.
+8. Actions tab → "Crawl stores" → Run workflow, to check the crawler can write to Neon. A run where
+   any store fails ends red (the store keeps its previous deals), so GitHub emails you.
+9. Check `https://<project>.vercel.app/api/health` → `{"ok":true,"db":true,"lastCrawl":…}` (503 if
+   the database is unreachable; handy for an uptime monitor).
 
 Online, a Refresh click starts the GitHub job (starts in ~30 s, a full crawl takes a few minutes);
-the buttons show "Refreshing…" meanwhile. Rate limits are per function instance there (best effort).
+the buttons show "Refreshing…" meanwhile. The limits that guard costly work (refreshes, Wolt
+lookups, photo checks and the daily photo cap) are counted in the database, so they hold across
+function instances; the general API/page limits are per instance (best effort).
 Locally nothing changes: files in `data/`, in-process crawls and cron.
 
 ## How it works

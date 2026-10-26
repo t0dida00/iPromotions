@@ -31,3 +31,24 @@ create table if not exists favorites (
   created_at timestamptz not null default now(),
   primary key (user_id, segment, category)
 );
+
+-- "Follow your discount" dates per signed-in user (src/expiry.js). One row per date, so requests on
+-- different function instances can't overwrite each other's changes.
+create table if not exists expiry_entries (
+  id           uuid primary key,
+  firebase_uid text not null,
+  kind         text not null check (kind in ('use_by', 'best_before')),
+  date         date not null,
+  product      text not null,
+  location     text,
+  added_at     timestamptz not null default now()
+);
+create index if not exists expiry_entries_uid on expiry_entries (firebase_uid, date);
+
+-- Request counters shared by every server instance, for the limits that guard costly work
+-- (refreshes, Wolt lookups, photo checks) and the daily photo-check cap (src/rateLimit.js).
+create table if not exists rate_counters (
+  key      text primary key,
+  count    int not null,
+  reset_at timestamptz not null
+);

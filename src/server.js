@@ -8,7 +8,7 @@ import { readStatus, segmentFile, segmentOf, SEGMENTS, migrateLegacy, readRaw } 
 import { rateLimit } from './rateLimit.js';
 import { authRouter, requireOwner, requireUser } from './auth.js';
 import { favoritesRouter } from './favorites.js';
-import { initDb, ensureDb, dbEnabled } from './db.js';
+import { initDb, ensureDb, dbEnabled, hit, query } from './db.js';
 import { dispatchCrawl } from './github.js';
 import { scanEnabled, scanLabel, listEntries, entryFrom, addEntry, changeEntry, removeEntry } from './expiry.js';
 import { woltOffers, cachedOffers } from './wolt.js';
@@ -29,11 +29,21 @@ if (ON_VERCEL) app.set('trust proxy', true);
 // A function instance may start cold: make sure the tables exist before the first query.
 app.use((_req, _res, next) => (dbEnabled() ? ensureDb().catch((e) => console.error('[db]', e.message)).then(() => next()) : next()));
 
-// Per-IP limits against bots: strict for refreshes, generous for data, loose for files.
+// Per-IP limits against bots: strict for refreshes, generous for data, loose for files. The costly
+// ones (refreshes, Wolt, photo checks) are counted in the database, shared by all instances.
 const limits = config.rateLimits ?? {};
-const crawlLimit = rateLimit({ name: 'crawl', ...limits.crawl, message: 'Too many refresh requests from this address. Please wait a few minutes.' });
-const scanLimit = rateLimit({ name: 'scan', ...limits.scan, message: 'Too many photo checks from this address. Please wait a few minutes.' });
-const woltLimit = rateLimit({ name: 'wolt', ...limits.wolt, message: 'Too many Wolt lookups for new locations from this address. Please wait a few minutes.' });
+const crawlLimit = rateLimit({ name: 'crawl', shared: true, ...limits.crawl, message: 'Too many refresh requests from this address. Please wait a few minutes.' });
+const scanLimit = rateLimit({ name: 'scan', shared: true, ...limits.scan, message: 'Too many photo checks from this address. Please wait a few minutes.' });
+const woltLimit = rateLimit({ name: 'wolt', shared: true, ...limits.wolt, message: 'Too many Wolt lookups for new locations from this address. Please wait a few minutes.' });
+// For uptime checks: is the database reachable, and when did the last crawl finish? Before the
+// rate limits, so a monitor polling it never gets 429.
+app.get('/api/health', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  let db = null; // null = no database configured
+  if (dbEnabled()) db = await query('select 1').then(() => true, () => false);
+  const lastCrawl = db === false ? null : (await readStatus()).updatedAt;
+  res.status(db === false ? 503 : 200).json({ ok: db !== false, db, lastCrawl });
+});
 app.use('/api', rateLimit({ name: 'api', ...limits.api }));
 app.use(rateLimit({ name: 'pages', ...limits.pages }));
 
@@ -201,20 +211,27 @@ app.get('/api/wolt', async (req, res) => {
 // dates (src/expiry.js). Photos arrive as small JPEG data URLs (shrunk in the browser) and are
 // never stored.
 const json = express.json({ limit: '400kb' });
-const scansToday = new Map(); // uid -> { day, count }, resets at midnight UTC or on restart
+const scansToday = new Map(); // uid -> { day, count } without a database; resets at midnight UTC
+
+// This user's photo checks today, counting this one. In the database when there is one, so the cap
+// holds across server instances.
+async function countScan(uid) {
+  const day = new Date().toISOString().slice(0, 10);
+  if (dbEnabled()) return (await hit(`scanday:${uid}:${day}`, 86_400_000)).count;
+  const used = scansToday.get(uid);
+  const count = (used?.day === day ? used.count : 0) + 1;
+  scansToday.set(uid, { day, count });
+  return count;
+}
 
 app.post('/api/expiry/scan', requireUser, scanLimit, json, async (req, res) => {
   const image = req.body?.image;
   if (typeof image !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/.test(image))
     return res.status(400).json({ error: 'Send the photo as a JPEG, PNG or WebP data URL.' });
   if (!scanEnabled()) return res.status(503).json({ error: 'Photo checks are not configured on this server yet.' });
-  const day = new Date().toISOString().slice(0, 10);
-  const used = scansToday.get(req.user.uid);
-  const count = used?.day === day ? used.count : 0;
-  if (count >= config.expiryScansPerDay)
-    return res.status(429).json({ error: `You have used today's ${config.expiryScansPerDay} photo checks. Try again tomorrow.` });
-  scansToday.set(req.user.uid, { day, count: count + 1 });
   try {
+    if ((await countScan(req.user.uid)) > config.expiryScansPerDay)
+      return res.status(429).json({ error: `You have used today's ${config.expiryScansPerDay} photo checks. Try again tomorrow.` });
     res.json(await scanLabel(image));
   } catch (e) {
     console.error('[expiry]', e.message);

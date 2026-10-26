@@ -1,11 +1,13 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { DATA_DIR, readJson, writeJson } from './store.js';
+import { dbEnabled, ensureDb, query } from './db.js';
 import { parseJson } from './analyst.js';
 
 // "Follow your discount": a signed-in user photographs products (markets often discount meat and
 // other fresh food on its last day) and a vision model reads the expiry date from each label. The
-// dates are kept per Firebase user in data/expiry.json; photos are never stored.
+// dates are kept per Firebase user in the expiry_entries table (with DATABASE_URL), otherwise in
+// data/expiry.json; photos are never stored.
 //
 // Each check is kept small on purpose, so a photo of something else can't run up time or tokens:
 // the browser shrinks the photo to ≤ 768 px (~500 image tokens), the reply is capped at 100 tokens,
@@ -95,7 +97,9 @@ function plausible(date, today) {
 }
 
 // ── Saved dates, per user ─────────────────────────────────────────────────────────────────────
-// Writes are chained so two requests can't overwrite each other's changes.
+// With a database each date is its own row, so requests on different server instances can't
+// overwrite each other. Without one, everything is in data/expiry.json and writes are chained so
+// two requests can't overwrite each other's changes.
 let writing = Promise.resolve();
 const update = (fn) => (writing = writing.then(async () => {
   const all = await readJson(FILE, {});
@@ -106,7 +110,13 @@ const update = (fn) => (writing = writing.then(async () => {
 
 const byDate = (a, b) => a.date.localeCompare(b.date) || a.addedAt.localeCompare(b.addedAt);
 
+// Rows in the same shape as the file entries (dates as YYYY-MM-DD, no time zone shifts).
+const COLUMNS = `id, kind, to_char(date, 'YYYY-MM-DD') as date, product, location,
+  to_char(added_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "addedAt"`;
+const sql = async (text, params) => (await ensureDb(), (await query(text, params)).rows);
+
 export async function listEntries(uid) {
+  if (dbEnabled()) return sql(`select ${COLUMNS} from expiry_entries where firebase_uid = $1 order by date, added_at`, [uid]);
   return ((await readJson(FILE, {}))[uid] ?? []).sort(byDate);
 }
 
@@ -118,26 +128,68 @@ export function entryFrom(body) {
   return { kind: body.kind, date: body.date, product: clean(body.product) ?? 'Product', location: clean(body.location) };
 }
 
-export const addEntry = (uid, entry) =>
-  update((all) => {
+export async function addEntry(uid, entry) {
+  if (dbEnabled()) {
+    // Make room first: keep the user's newest MAX_ENTRIES - 1 dates (drops the oldest date).
+    await sql(
+      `delete from expiry_entries where id in (
+         select id from expiry_entries where firebase_uid = $1 order by date desc, added_at desc offset $2)`,
+      [uid, MAX_ENTRIES - 1],
+    );
+    const [saved] = await sql(
+      `insert into expiry_entries (id, firebase_uid, kind, date, product, location)
+       values ($1, $2, $3, $4, $5, $6) returning ${COLUMNS}`,
+      [crypto.randomUUID(), uid, entry.kind, entry.date, entry.product, entry.location ?? null],
+    );
+    return saved;
+  }
+  return update((all) => {
     const list = (all[uid] ??= []);
     if (list.length >= MAX_ENTRIES) list.sort(byDate).shift(); // drop the oldest date
     const saved = { id: crypto.randomUUID(), ...entry, addedAt: new Date().toISOString() };
     list.push(saved);
     return saved;
   });
+}
 
-export const changeEntry = (uid, id, changes) =>
-  update((all) => {
+export async function changeEntry(uid, id, changes) {
+  if (dbEnabled()) {
+    const [e] = await sql(
+      `update expiry_entries set kind = $3, date = $4, product = $5, location = $6
+       where firebase_uid = $1 and id = $2 returning ${COLUMNS}`,
+      [uid, id, changes.kind, changes.date, changes.product, changes.location ?? null],
+    );
+    return e ?? null;
+  }
+  return update((all) => {
     const e = (all[uid] ?? []).find((x) => x.id === id);
     if (e) Object.assign(e, changes);
     return e ?? null;
   });
+}
 
-export const removeEntry = (uid, id) =>
-  update((all) => {
+export async function removeEntry(uid, id) {
+  if (dbEnabled()) return (await sql('delete from expiry_entries where firebase_uid = $1 and id = $2 returning id', [uid, id])).length > 0;
+  return update((all) => {
     const list = all[uid] ?? [];
     const i = list.findIndex((x) => x.id === id);
     if (i >= 0) list.splice(i, 1);
     return i >= 0;
   });
+}
+
+// One-off (scripts/import-data.js): copies { uid: [entries] } from an old expiry.json into the table.
+// Entries already there are kept.
+export async function importEntries(all) {
+  let n = 0;
+  for (const [uid, list] of Object.entries(all ?? {}))
+    for (const e of list) {
+      await sql(
+        `insert into expiry_entries (id, firebase_uid, kind, date, product, location, added_at)
+         values ($1, $2, $3, $4, $5, $6, $7) on conflict (id) do nothing`,
+        [e.id, uid, e.kind, e.date, e.product ?? 'Product', e.location ?? null, e.addedAt ?? new Date().toISOString()],
+      );
+      n++;
+    }
+  return n;
+}

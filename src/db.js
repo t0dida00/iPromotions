@@ -1,18 +1,28 @@
 import fs from 'node:fs/promises';
 import pg from 'pg';
+import { attachDatabasePool } from '@vercel/functions';
 
-// PostgreSQL for accounts: users (with role) and their favorite categories. Deals stay in the JSON
-// files (src/store.js). Everything here needs DATABASE_URL; without it the site still runs, just
-// without accounts (favorites stay in the browser and nobody is owner).
+// PostgreSQL for accounts: users (with role), their favorite categories and expiry dates, plus shared
+// rate-limit counters. Deals stay in the JSON files (src/store.js) unless DATA_STORE=postgres.
+// Everything here needs DATABASE_URL; without it the site still runs, just without accounts
+// (favorites stay in the browser and nobody is owner).
 //
 // Local: `docker compose up -d` (docker-compose.yml). Production: a hosted Postgres such as Neon;
 // SSL is turned on when the URL asks for it (sslmode=require).
 
 const url = process.env.DATABASE_URL;
 const pool = url
-  ? new pg.Pool({ connectionString: url, ssl: /sslmode=(require|verify)/.test(url) ? { rejectUnauthorized: false } : undefined, max: 5 })
+  ? new pg.Pool({
+      connectionString: url,
+      ssl: /sslmode=(require|verify)/.test(url) ? { rejectUnauthorized: false } : undefined,
+      max: 5,
+      idleTimeoutMillis: 10_000, // hand idle connections back soon (Neon's pooler has a cap)
+      connectionTimeoutMillis: 5_000,
+    })
   : null;
 pool?.on('error', (e) => console.error('[db]', e.message)); // idle client dropped; the pool reconnects
+// On Vercel, lets a function instance close idle clients before it is suspended.
+if (pool && process.env.VERCEL) attachDatabasePool(pool);
 
 export const dbEnabled = () => Boolean(pool);
 const OWNER_EMAIL = () => (process.env.OWNER_EMAIL || 'ddkhoa97@gmail.com').trim().toLowerCase();
@@ -22,6 +32,25 @@ export async function initDb() {
   if (!pool) return false;
   await pool.query(await fs.readFile(new URL('./db/schema.sql', import.meta.url), 'utf8'));
   return true;
+}
+
+export const query = (text, params) => pool.query(text, params);
+
+// Counts one request against `key` in a fixed window shared by every server instance; returns the
+// count so far and when the window ends. Expired windows restart at 1.
+export async function hit(key, windowMs) {
+  await ensureDb();
+  const { rows } = await pool.query(
+    `insert into rate_counters (key, count, reset_at) values ($1, 1, now() + $2 * interval '1 millisecond')
+     on conflict (key) do update set
+       count    = case when rate_counters.reset_at <= now() then 1 else rate_counters.count + 1 end,
+       reset_at = case when rate_counters.reset_at <= now() then excluded.reset_at else rate_counters.reset_at end
+     returning count, reset_at`,
+    [key, windowMs],
+  );
+  // Now and then, forget finished windows so the table stays small.
+  if (Math.random() < 0.01) pool.query('delete from rate_counters where reset_at < now()').catch(() => {});
+  return { count: rows[0].count, resetAt: rows[0].reset_at.getTime() };
 }
 
 // ── Key/value documents (src/store.js when DATA_STORE=postgres) ─────────────────────────────────
