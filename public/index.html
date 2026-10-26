@@ -13,7 +13,7 @@
 <body>
   <div class="app">
     <!-- Restore a collapsed sidebar before the first paint, so it doesn't open and then snap shut. -->
-    <script>try { if (localStorage.getItem('ipromotion.sidebarCollapsed') === 'true') document.currentScript.parentElement.classList.add('sidebar-collapsed'); } catch {}</script>
+    <script>try { const c = document.currentScript.parentElement.classList; if (localStorage.getItem('ipromotion.sidebarCollapsed') === 'true') c.add('sidebar-collapsed'); if (localStorage.getItem('ipromotion.dataNoteClosed') === 'true') c.add('data-note-closed'); } catch {}</script>
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <img class="logo" src="/logo.svg" alt="" />
@@ -109,7 +109,7 @@
         </header>
         <div class="filters">
           <div class="wrap">
-            <p class="data-note" role="note"><b>Please check before you go.</b> Offers are collected automatically from each store's website and can be wrong, missing or out of date (prices, products or dates). Always confirm on the store's official website or brochure before visiting.</p>
+            <p class="data-note" role="note"><button class="data-note-close" type="button" aria-label="Close this notice" title="Close">×</button><b>Please check before you go.</b> Offers are collected automatically from each store's website and can be wrong, missing or out of date (prices, products or dates). Always confirm on the store's official website or brochure before visiting.</p>
             <div class="tools favs-tools">
               <input id="fav-q" type="search" placeholder="Search your favorites…" autocomplete="off" />
               <select id="fav-sort" aria-label="Sort by">
@@ -350,7 +350,7 @@
     <div class="filters">
       <div class="wrap">
         <h2 class="deals-title">All discounted products</h2>
-        <p class="data-note" role="note"><b>Please check before you go.</b> Offers are collected automatically from each store's website and can be wrong, missing or out of date (prices, products or dates). Always confirm on the store's official website or brochure before visiting.</p>
+        <p class="data-note" role="note"><button class="data-note-close" type="button" aria-label="Close this notice" title="Close">×</button><b>Please check before you go.</b> Offers are collected automatically from each store's website and can be wrong, missing or out of date (prices, products or dates). Always confirm on the store's official website or brochure before visiting.</p>
         <nav class="stores" data-role="stores" aria-label="Store"></nav>
         <div class="tools">
           <input data-role="q" type="search" placeholder="Search products or brands…" autocomplete="off" />

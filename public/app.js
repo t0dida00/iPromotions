@@ -565,6 +565,13 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   navigate(a.getAttribute('href'));
 });
+// "Please check before you go" notices: closing one hides them all, remembered in this browser
+// (restored before painting by the inline script in index.html). The footer keeps the disclaimer.
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.data-note-close')) return;
+  document.querySelector('.app').classList.add('data-note-closed');
+  store.set('ipromotion.dataNoteClosed', true);
+});
 window.addEventListener('popstate', showView);
 showView();
 
