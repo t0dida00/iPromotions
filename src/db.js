@@ -1,0 +1,90 @@
+import fs from 'node:fs/promises';
+import pg from 'pg';
+
+// PostgreSQL for accounts: users (with role) and their favorite categories. Deals stay in the JSON
+// files (src/store.js). Everything here needs DATABASE_URL; without it the site still runs, just
+// without accounts (favorites stay in the browser and nobody is owner).
+//
+// Local: `docker compose up -d` (docker-compose.yml). Production: a hosted Postgres such as Neon;
+// SSL is turned on when the URL asks for it (sslmode=require).
+
+const url = process.env.DATABASE_URL;
+const pool = url
+  ? new pg.Pool({ connectionString: url, ssl: /sslmode=(require|verify)/.test(url) ? { rejectUnauthorized: false } : undefined, max: 5 })
+  : null;
+pool?.on('error', (e) => console.error('[db]', e.message)); // idle client dropped; the pool reconnects
+
+export const dbEnabled = () => Boolean(pool);
+const OWNER_EMAIL = () => (process.env.OWNER_EMAIL || 'ddkhoa97@gmail.com').trim().toLowerCase();
+
+// Creates the tables if they don't exist yet. Call once before serving.
+export async function initDb() {
+  if (!pool) return false;
+  await pool.query(await fs.readFile(new URL('./db/schema.sql', import.meta.url), 'utf8'));
+  return true;
+}
+
+// Saves (or refreshes) the signed-in user from their verified token claims and returns the row.
+// The account whose verified email is OWNER_EMAIL becomes the owner; everyone else is a user.
+export async function upsertUser(claims) {
+  const email = String(claims.email ?? '').toLowerCase();
+  if (!email) throw new Error('Account has no email');
+  const role = claims.email_verified && email === OWNER_EMAIL() ? 'owner' : 'user';
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    // Only one owner: if OWNER_EMAIL was changed to another account, the old owner becomes a user.
+    if (role === 'owner') await client.query(`update users set role = 'user' where role = 'owner' and firebase_uid <> $1`, [claims.sub]);
+    const { rows } = await client.query(
+      `insert into users (firebase_uid, email, name, photo_url, role)
+       values ($1, $2, $3, $4, $5)
+       on conflict (firebase_uid) do update
+         set email = excluded.email, name = excluded.name, photo_url = excluded.photo_url,
+             role = excluded.role, last_login_at = now()
+       returning id, email, name, photo_url, role`,
+      [claims.sub, email, claims.name ?? null, claims.picture ?? null, role],
+    );
+    await client.query('commit');
+    return rows[0];
+  } catch (e) {
+    await client.query('rollback').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getUserByUid(uid) {
+  const { rows } = await pool.query('select id, email, name, photo_url, role from users where firebase_uid = $1', [uid]);
+  return rows[0] ?? null;
+}
+
+// { groceries: ['Bread & bakery'], clothing: ['Shoes'], … }
+export async function listFavorites(userId) {
+  const { rows } = await pool.query('select segment, category from favorites where user_id = $1 order by segment, category', [userId]);
+  const out = {};
+  for (const r of rows) (out[r.segment] ??= []).push(r.category);
+  return out;
+}
+
+export async function addFavorite(userId, segment, category) {
+  await pool.query('insert into favorites (user_id, segment, category) values ($1, $2, $3) on conflict do nothing', [userId, segment, category]);
+}
+
+export async function removeFavorite(userId, segment, category) {
+  await pool.query('delete from favorites where user_id = $1 and segment = $2 and category = $3', [userId, segment, category]);
+}
+
+// Adds a set of favorites (the browser's, at sign-in) to the account; existing ones are kept.
+export async function mergeFavorites(userId, map) {
+  const pairs = Object.entries(map).flatMap(([segment, cats]) => cats.map((c) => [segment, c]));
+  if (pairs.length) {
+    await pool.query(
+      `insert into favorites (user_id, segment, category)
+       select $1, s, c from unnest($2::text[], $3::text[]) as t(s, c)
+       on conflict do nothing`,
+      [userId, pairs.map((p) => p[0]), pairs.map((p) => p[1])],
+    );
+  }
+  return listFavorites(userId);
+}

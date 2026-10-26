@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>iPromotion</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="theme-color" content="#0f7b5f" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Restore a collapsed sidebar before the first paint, so it doesn't open and then snap shut. -->
+    <script>try { if (localStorage.getItem('ipromotion.sidebarCollapsed') === 'true') document.currentScript.parentElement.classList.add('sidebar-collapsed'); } catch {}</script>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <img class="logo" src="/logo.svg" alt="" />
+        <span class="brand-name"><span class="brand-i">i</span>Promotion</span>
+      </div>
+      <!-- Add new sections here: a nav link to /x with data-view="x", a <section data-view="x"> below,
+           and '/x' in the route list in src/server.js. -->
+      <nav class="nav" aria-label="Sections">
+        <a href="/dashboard" class="nav-item" data-view="dashboard">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="/favorites" class="nav-item" data-view="favorites">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9Z"/></svg>
+          <span>Favorites</span>
+          <span class="nav-count" id="fav-count" hidden></span>
+        </a>
+        <a href="/promotions" class="nav-item" data-view="promotions">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+          <span>Market Promotions</span>
+        </a>
+        <a href="/clothing" class="nav-item" data-view="clothing">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3 3 6l2 5 3-1v11h8V10l3 1 2-5-5-3a4 4 0 0 1-8 0Z"/></svg>
+          <span>Cloth Promotions</span>
+        </a>
+        <a href="/electronics" class="nav-item" data-view="electronics">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <span>Electronics Promotions</span>
+        </a>
+        <a href="/food" class="nav-item" data-view="food">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a8 8 0 0 1 16 0Z"/><path d="M3 15h18M5 19h14a1 1 0 0 0 1-1v-1H4v1a1 1 0 0 0 1 1Z"/></svg>
+          <span>Food Promotions</span>
+        </a>
+        <a href="/follow" class="nav-item" data-view="follow">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M9 15.5l2 2 4-4"/></svg>
+          <span>Follow discounts</span>
+          <span class="nav-count" id="follow-count" hidden></span>
+        </a>
+      </nav>
+      <!-- Filled by auth.js: a "Login" button (opens #login-dialog), or the signed-in user's avatar
+           (opens #profile-dialog). -->
+      <div class="account" id="account" hidden></div>
+      <p class="sidebar-foot" id="updated">Loading…</p>
+      <button class="collapse-btn" id="collapse-btn" aria-label="Collapse sidebar" title="Collapse sidebar" aria-expanded="true" aria-controls="sidebar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16M15.5 10 13.5 12l2 2"/></svg>
+      </button>
+      <dialog class="login-dialog" id="login-dialog" aria-labelledby="login-title">
+        <form method="dialog" class="login-close-form">
+          <button class="login-close" aria-label="Close">×</button>
+        </form>
+        <img class="logo" src="/logo.svg" alt="" />
+        <h2 id="login-title">Log in to iPromotion</h2>
+        <p class="sub">Use your Google account to continue.</p>
+        <div id="login-google"></div>
+      </dialog>
+      <dialog class="login-dialog profile-dialog" id="profile-dialog" aria-labelledby="profile-name">
+        <form method="dialog" class="login-close-form">
+          <button class="login-close" aria-label="Close">×</button>
+        </form>
+        <div id="profile"></div>
+      </dialog>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <div class="main">
+      <!-- Dashboard -->
+      <section class="view" data-view="dashboard" hidden>
+        <header class="page-head wrap">
+          <button class="menu-btn" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="page-title">
+            <h1>Dashboard</h1>
+            <p class="sub">Crawler status and refresh history</p>
+          </div>
+          <button class="btn crawl-btn">Refresh all</button>
+        </header>
+        <div class="wrap dash" id="dash">
+          <p class="hint">Loading…</p>
+        </div>
+      </section>
+
+      <!-- Favorites: deals in the categories starred in every promotions section (app.js). -->
+      <section class="view" data-view="favorites" hidden>
+        <header class="page-head wrap">
+          <button class="menu-btn" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="page-title">
+            <h1>Favorites</h1>
+            <p class="sub">Deals in the categories you starred in every promotions section</p>
+          </div>
+        </header>
+        <div class="filters">
+          <div class="wrap">
+            <div class="tools favs-tools">
+              <input id="fav-q" type="search" placeholder="Search your favorites…" autocomplete="off" />
+              <select id="fav-sort" aria-label="Sort by">
+                <option value="discount">Biggest discount</option>
+                <option value="price">Lowest price</option>
+                <option value="saving">Biggest saving €</option>
+                <option value="name">Name A–Z</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="wrap favs" id="favs"></div>
+      </section>
+
+      <!-- Promotions sections: filled from #promo-template by app.js, one per store segment. -->
+      <section class="view promo" data-view="promotions" data-segment="groceries" hidden
+        data-title="Market Promotions"
+        data-sub="This week's deals from Tokmanni, K-Supermarket, K-Citymarket, Prisma and Lidl"
+        data-links-title="Weekly brochures"
+        data-links-hint="Open each store's own flyer to browse this week's promotions yourself."
+        data-link-text="Open this week's brochure"></section>
+
+      <section class="view promo" data-view="clothing" data-segment="clothing" hidden
+        data-title="Cloth Promotions"
+        data-sub="Clothing and shoe sales from XXL, Intersport, Stadium, KappAhl and New Yorker, plus sale-page links for H&amp;M and Lindex"
+        data-links-title="Sale pages"
+        data-links-hint="Open each store's own sale page to browse their promotions yourself."
+        data-link-text="Open sale page"></section>
+
+      <section class="view promo" data-view="electronics" data-segment="electronics" hidden
+        data-title="Electronics Promotions"
+        data-sub="Campaign and clearance deals from Power, Verkkokauppa.com and Gigantti"
+        data-links-title="Campaign pages"
+        data-links-hint="Open each store's own campaign page to browse their promotions yourself."
+        data-link-text="Open campaign page"></section>
+
+      <section class="view promo" data-view="food" data-segment="food" data-wolt hidden
+        data-title="Food Promotions"
+        data-sub="Current fast-food offers from Hesburger and Burger King, Wolt restaurant offers near you, plus links to McDonald's and Subway"
+        data-links-title="Offer pages"
+        data-links-hint="Open each chain's own offers page (McDonald's and Subway list theirs mainly in their apps)."
+        data-link-text="Open offers"></section>
+
+      <!-- Follow your discount: photo → expiry date → calendar (public/expiry.js). -->
+      <section class="view" data-view="follow" hidden>
+        <header class="page-head wrap">
+          <button class="menu-btn" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="page-title">
+            <h1>Follow your discount</h1>
+            <p class="sub">Snap product labels; we mark their use-by or best-before dates, the day stores often discount them</p>
+          </div>
+        </header>
+        <div class="wrap follow" id="follow"></div>
+      </section>
+    </div>
+  </div>
+
+  <template id="promo-template">
+    <header class="page-head wrap">
+      <button class="menu-btn" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="page-title">
+        <h1 data-role="title"></h1>
+        <p class="sub" data-role="sub"></p>
+      </div>
+      <button class="btn crawl-btn">Refresh now</button>
+    </header>
+
+    <section class="wrap brochures-wrap">
+      <h2 data-role="links-title"></h2>
+      <p class="hint" data-role="links-hint"></p>
+      <div class="brochures" data-role="brochures"></div>
+    </section>
+
+    <div class="filters">
+      <div class="wrap">
+        <h2 class="deals-title">All discounted products</h2>
+        <nav class="stores" data-role="stores" aria-label="Store"></nav>
+        <div class="tools">
+          <input data-role="q" type="search" placeholder="Search products or brands…" autocomplete="off" />
+          <select data-role="sort" aria-label="Sort by">
+            <option value="discount">Biggest discount</option>
+            <option value="price">Lowest price</option>
+            <option value="saving">Biggest saving €</option>
+            <option value="name">Name A–Z</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap layout">
+      <aside class="cats" data-role="cats" aria-label="Category"></aside>
+      <section>
+        <p class="count" data-role="count"></p>
+        <div class="grid" data-role="grid"></div>
+        <div data-role="sentinel"></div>
+        <p class="empty" data-role="empty" hidden>No deals match these filters.</p>
+      </section>
+    </div>
+  </template>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Qué es
+
+iPromotion (antes iBenefits) rastrea (crawl) las ofertas semanales de supermercados (Tokmanni, K-Ruoka, Prisma, Lidl),
+tiendas de ropa (XXL, Intersport, Stadium, KappAhl, New Yorker) y electrónica (Power,
+Verkkokauppa.com, Gigantti) de la zona de Oulu, y las muestra en una sola web con filtros.
+Node.js (ESM, `"type": "module"`), Express 5, node-cron, cheerio y Playwright (Chromium).
+Sin build, sin bundler, sin framework de frontend. El código, los comentarios y la UI están en inglés.
+
+## Comandos
+
+```bash
+npm install        # postinstall descarga Chromium headless (playwright install chromium)
+npm start          # servidor en http://localhost:3000; crawl al arrancar si no hay datos, luego según cron
+npm run crawl      # crawl puntual de todas las tiendas desde la terminal
+```
+
+No hay tests, linter ni formateador configurados. Para probar un solo crawler, impórtalo y
+llámalo con su entrada de `config.js`, p. ej.:
+
+```bash
+node -e "import('./config.js').then(async ({default:c}) => { const {crawlPower} = await import('./src/crawlers/power.js'); const d = await crawlPower(c.sources.power); console.log(d.length, d[0]); })"
+```
+
+Variables de entorno: `PORT`, `CRON_SCHEDULE`, `FOOD_CRON_SCHEDULE`, `CRAWL_CONCURRENCY`, `REFRESH_COOLDOWN_MINUTES`,
+`DATABASE_URL`, `OWNER_EMAIL`.
+
+## Arquitectura
+
+**`config.js` es la fuente de verdad de las tiendas.** Cada clave de `sources` es una tienda:
+`type` elige el crawler (`null` = solo enlace al folleto, p. ej. H&M y Lindex, que bloquean
+navegadores automatizados), `segment` la sección (`groceries` por defecto, `clothing`,
+`electronics`). Varias tiendas pueden compartir crawler (K-Supermarket y K-Citymarket usan `kruoka`).
+
+**Flujo de un crawl (`src/crawl.js`):**
+1. `crawlAll(log, trigger, only)` reparte las tiendas habilitadas entre un pool de workers
+   (`config.concurrency`). Solo hay un crawl a la vez; las peticiones que llegan mientras tanto se
+   encolan y se fusionan (`queued`) y se ejecutan al terminar.
+2. Cada crawler (`src/crawlers/<type>.js`) exporta `crawlX(opts, log)` y devuelve deals con forma
+   `{ id: '<type>:<sku>', name, brand, category, price, regularPrice, dealText, image, url, validUntil }`.
+3. `enrich()` reescribe el `id` con la clave de la tienda, añade `source`, `segment`,
+   `discountPct` y `group` (categoría unificada vía `unifyCategory` de `src/categories.js`).
+4. Si un crawler lanza error, se conservan los deals anteriores de esa tienda y se marca `ok: false`.
+   Los crawlers deben lanzar (`throw`) cuando la página cambia de estructura, no devolver `[]`.
+5. Solo se reescriben los ficheros de los segmentos afectados.
+
+**Cuentas (`src/db.js`, PostgreSQL con `pg`):** tablas `users` (rol `owner`/`user`, un solo owner
+por índice único parcial; el owner es el email verificado de `OWNER_EMAIL`) y `favorites`
+(`user_id, segment, category`). Esquema en `src/db/schema.sql`, aplicado al arrancar (idempotente).
+Necesita `DATABASE_URL` (local: `docker compose up -d`, puerto 5434); sin ella el sitio funciona sin
+cuentas y el owner se deduce del token.
+
+**Almacenamiento (`src/store.js`):** JSON en `data/` (en `.gitignore`), escritura atómica
+(tmp + rename). `deals-<segment>.json` por sección y `status.json` con estado por tienda,
+historial de las últimas 20 ejecuciones y hora de actualización por sección. `migrateLegacy()`
+convierte el antiguo `data/deals.json` único.
+
+**Crawlers:** dos estilos. HTTP plano + cheerio/JSON embebido (Tokmanni, Lidl, KappAhl, New Yorker)
+o Playwright vía `withBrowser()` de `src/browser.js`, que normalmente intercepta las llamadas a la
+API interna de la propia web en vez de parsear el DOM (K-Ruoka, Power, Verkkokauppa, Gigantti,
+Prisma, XXL) o pulsa "cargar más" (Intersport, Stadium). Reutiliza `USER_AGENT`, `sleep` y
+`declineCookies` de `src/browser.js`. Política del proyecto: no intentar saltarse protecciones anti-bot.
+
+**Categorías (`src/categories.js`):** listas de reglas regex por segmento (`RULES`,
+`CLOTHING_RULES`, `ELECTRONICS_RULES`); gana la primera que coincide, así que el orden importa
+(hay grupos repetidos a propósito). En electrónica se evalúa `"<categoría> <nombre>"`; en los demás,
+la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL/Stadium (`clothingOnly`).
+
+**Servidor (`src/server.js`):**
+- `GET /api/meta` (tiendas, estado, cooldowns; se consulta con polling), `GET /api/deals?segment=`
+  (envía el fichero del segmento con ETag/304), `GET /api/status` (dashboard),
+  `POST /api/crawl[?segment=]` (solo acepta `segment`; aplica cooldown por tienda y devuelve 429
+  si no queda nada que hacer). Solo para propietarios: `requireOwner` (`src/auth.js`) verifica el ID
+  token de Firebase (`Authorization: Bearer`, firma RS256 contra los certificados de Google, sin
+  firebase-admin) y el rol del usuario en la tabla `users`; 401/403 si no. `requireUser` deja en
+  `req.user` `{ uid, email, name, role, id }`.
+  `GET /api/me` guarda/actualiza al usuario y dice si es propietario; el frontend pone `html.is-owner`
+  y el CSS oculta los botones de refresco a los demás.
+- `GET/PUT/DELETE /api/favorites[/:segment/:category]` y `POST /api/favorites/merge`
+  (`src/favorites.js`): favoritos de la cuenta.
+- `GET /api/wolt?lat=&lon=` (Food Promotions): ofertas de Wolt cerca de la ubicación del navegador,
+  buscadas en vivo con Playwright (`src/wolt.js`, botón "Share location" de wolt.com), no por el cron.
+  Caché por zona de ~1 km (`config.wolt`); solo las búsquedas sin caché cuentan para `rateLimits.wolt`.
+  Frontend en `public/wolt.js`, montado en la sección con `data-wolt`.
+- Rate limit por IP en memoria (`src/rateLimit.js`, valores en `config.rateLimits`).
+- Login con Google mediante Firebase Authentication, todo en el navegador (`public/auth.js`, SDK
+  cargado desde gstatic con versión fija). El servidor solo expone la configuración web pública de
+  Firebase en `GET /api/auth-config` (`src/auth.js`, variables `FIREBASE_*` de `.env`); sin ellas el
+  botón de Google del diálogo aparece desactivado. Las rutas que exigen sesión reciben el ID token
+  de Firebase en `Authorization: Bearer` y lo verifica `src/auth.js` (sin `firebase-admin`):
+  `requireOwner` (refrescos) y `requireUser` (deja `req.user = { uid, email }`).
+- **Follow your discount** (`/follow`, `src/expiry.js` + `public/expiry.js`): el usuario fotografía
+  etiquetas, "Mark the dates" envía cada foto (reducida en el navegador a ≤ 768 px) a
+  `POST /api/expiry/scan`, que llama a un modelo de visión de Hugging Face (`NUXT_HF_VISION_MODEL`,
+  por defecto `Qwen/Qwen3-VL-30B-A3B-Instruct:fastest`) con `max_tokens: 100` y corte a los 8 s
+  (~500 tokens y 1–2 s por foto). El modelo devuelve la fecha y **las palabras impresas junto a
+  ella**; el tipo (use-by / best-before / fecha de envasado, que se descarta) lo decide `KINDS` en
+  código, porque el modelo los confunde. Las fechas se guardan por usuario en `data/expiry.json`
+  (CRUD en `/api/expiry`); las fotos no se guardan. Límites: `rateLimits.scan` por IP y
+  `expiryScansPerDay` por usuario (en memoria).
+- Cron (ignora el cooldown): `config.schedule` (semanal) refresca las secciones sin horario propio;
+  las de `config.sectionSchedules` tienen el suyo (Food: diario a las 09:00). El dashboard muestra el
+  próximo de todos (`nextSchedule()` en `src/server.js`).
+
+**Frontend (`public/`):** HTML/JS vanilla. `/dashboard`, `/promotions` (también `/`), `/clothing`,
+`/electronics`, `/food` y `/follow` sirven el mismo `index.html`; `app.js` muestra la `<section data-view>` según la ruta.
+Cada `<section data-segment>` carga sus deals solo al abrirse. Los favoritos (categorías con ★)
+se guardan en localStorage por sección sin sesión, y en la cuenta con sesión (`account.active` en
+`app.js`; se fusionan una vez por inicio de sesión vía `ipromotion:account` de `auth.js`); `/favorites` (`FavoritesView` en `app.js`) junta los deals de
+las categorías favoritas de todas las secciones, leyendo los `PromoView`. En escritorio la barra lateral se
+pliega a una columna de iconos (`.app.sidebar-collapsed`, guardado en localStorage y restaurado por un
+`<script>` en línea antes de pintar); en móvil sigue siendo el cajón deslizante. `dashboard.js` pinta `/api/status`.
+Logo en `public/logo.svg`; el favicon (`favicon.svg`) es el mismo dibujo con la etiqueta más grande, y
+`favicon-32.png` / `apple-touch-icon.png` son copias PNG renderizadas de él (regenerarlas si cambia).
+
+## Tareas habituales
+
+- **Añadir tienda:** entrada en `config.js` (+ logo en `public/logos/` si aplica); si es un tipo
+  nuevo, crear `src/crawlers/<type>.js` y registrarlo en `CRAWLERS` de `src/crawl.js`. Revisar que
+  sus categorías encajen en las reglas de `src/categories.js`. Actualizar la tabla del README.
+- **Añadir sección:** `segment` en las tiendas, reglas + fallback en `SEGMENT_RULES`, enlace de nav
+  y `<section data-view data-segment>` en `public/index.html`, y la ruta en la lista de
+  `app.get([...])` de `src/server.js`.
+
+`docs/ROADMAP.md` recoge el trabajo pendiente (SQLite + API paginada, historial de precios, alertas,
+tests con fixtures por crawler).

@@ -1,0 +1,22 @@
+# Local PostgreSQL for iPromotion (users and favorites). Port 5434 so it doesn't clash with other
+# Postgres servers on 5432/5433. Start: `docker compose up -d`; then in .env:
+#   DATABASE_URL=postgres://ipromotion:ipromotion@localhost:5434/ipromotion
+# In production, point DATABASE_URL at a hosted Postgres (e.g. Neon) instead.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ipromotion
+      POSTGRES_PASSWORD: ipromotion
+      POSTGRES_DB: ipromotion
+    ports:
+      - '5434:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ipromotion']
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  pgdata:
