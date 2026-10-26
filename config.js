@@ -52,7 +52,7 @@ export default {
   // not crawled. Results are cached per ~1 km area; `defaultLocation` is used when the browser
   // doesn't share its location.
   wolt: {
-    cacheMinutes: 30,
+    cacheMinutes: 6 * 60, // 6 hours: nearby visitors share one lookup (each new one opens Chromium, ~50 s on Vercel)
     maxCachedLocations: 200,
     defaultLocation: { lat: 65.0121, lon: 25.4651, name: 'Oulu city center' },
   },

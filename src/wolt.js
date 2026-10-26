@@ -14,7 +14,7 @@ import { DATA_DIR, readJson, writeJson, useDb } from './store.js';
 
 const BASE = 'https://wolt.com/en';
 const opts = config.wolt ?? {};
-const TTL_MS = (opts.cacheMinutes ?? 30) * 60_000;
+const TTL_MS = (opts.cacheMinutes ?? 6 * 60) * 60_000;
 const MAX_CACHED = opts.maxCachedLocations ?? 200;
 
 const cache = new Map(); // "lat,lon" (2 decimals, ~1 km) -> { at, data }

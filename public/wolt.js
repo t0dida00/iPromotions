@@ -5,6 +5,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 // Links and images come from scraped sites: only http(s) URLs (or our own /paths), never javascript:.
 const safeUrl = (u) => (/^(https?:\/\/|\/)/i.test(String(u ?? '')) ? esc(u) : '');
 const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+// Areas are cached for 6 hours, so the check time may be yesterday's: "today 14:02" / "yesterday 18:40".
+const checkedAt = (iso) => {
+  const d = new Date(iso);
+  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86_400_000);
+  return `${days === 0 ? 'today' : days === 1 ? 'yesterday' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${hhmm(iso)}`;
+};
 const PAGE = 24;
 
 const FILTERS = {
@@ -85,7 +91,7 @@ function render() {
     locating: 'Asking your browser for your location…',
     loading: 'Looking up Wolt offers near you — a new area takes a few seconds…',
     error: esc(state.message),
-    ready: `Offers open to everyone, no Wolt+ needed · ${where} · checked ${data ? hhmm(data.fetchedAt) : ''}`,
+    ready: `Offers open to everyone, no Wolt+ needed · ${where} · checked ${data ? checkedAt(data.fetchedAt) : ''}`,
   }[state.status];
   const busy = state.status === 'locating' || state.status === 'loading';
 

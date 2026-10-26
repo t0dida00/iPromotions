@@ -107,7 +107,7 @@ The schema is in `src/db/schema.sql` and is applied on start (idempotent).
 | Website + API | **Vercel**, region `fra1` | `public/` from the CDN; `/api/*` is the Express app as one function (`api/index.js`, `vercel.json`) |
 | Database | **Neon** Postgres (Vercel Marketplace, Frankfurt) | Pooled `DATABASE_URL` |
 | Crawling | **GitHub Actions** | `.github/workflows/crawl.yml`: Wednesdays (all but Food), daily (Food), and the owner's Refresh button |
-| Wolt lookups | Vercel function | Chromium from `@sparticuz/chromium`; ~50 s for a new area, then cached per area in the database |
+| Wolt lookups | Vercel function | Chromium from `@sparticuz/chromium`; ~50 s for a new area, then cached per ~1 km area for 6 hours in the database |
 
 One-time setup:
 1. **Vercel**: import the repository (or `vercel link`).
