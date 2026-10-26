@@ -538,7 +538,8 @@ function showView() {
     if (a.dataset.view === currentView) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   }
-  document.title = `${document.querySelector(`.nav-item[data-view="${currentView}"] span`)?.textContent.trim()} · iPromotion`;
+  const label = document.querySelector(`.nav-item[data-view="${currentView}"] span`) ?? document.querySelector(`.view[data-view="${currentView}"] h1`);
+  document.title = `${label?.textContent.trim()} · iPromotion`;
   document.querySelector('.app').classList.remove('menu-open');
   if (currentView === 'dashboard') showDashboard();
   else hideDashboard();
@@ -554,6 +555,12 @@ function navigate(href) {
 }
 document.querySelector('.nav').addEventListener('click', (e) => {
   const a = e.target.closest('.nav-item');
+  if (!a || e.metaKey || e.ctrlKey) return;
+  e.preventDefault();
+  navigate(a.getAttribute('href'));
+});
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-view-link]');
   if (!a || e.metaKey || e.ctrlKey) return;
   e.preventDefault();
   navigate(a.getAttribute('href'));
