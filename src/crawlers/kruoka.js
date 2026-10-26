@@ -14,8 +14,14 @@ export async function crawlKRuoka({ url, label }, log = console.log) {
       } catch {}
     });
 
+    // When K-Ruoka's bot protection turns us away, its own API answers 403 and product-map is never
+    // requested: stop right away instead of waiting out the timeout (we don't try to get around it).
+    const blocked = page
+      .waitForResponse((r) => r.url().includes('/kr-api/') && r.status() === 403, { timeout: 90_000 })
+      .then(() => Promise.reject(new Error('K-Ruoka answered 403: its bot protection turned the crawler away')));
+    blocked.catch(() => {}); // only matters if it wins the race below
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-    await page.waitForResponse((r) => r.url().includes('product-map'), { timeout: 90_000 });
+    await Promise.race([page.waitForResponse((r) => r.url().includes('product-map'), { timeout: 90_000 }), blocked]);
     await declineCookies(page);
 
     // The flyer may lazy-load more offers while scrolling; keep going until nothing new arrives.

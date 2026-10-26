@@ -538,7 +538,8 @@ function showView() {
     if (a.dataset.view === currentView) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   }
-  document.title = `${document.querySelector(`.nav-item[data-view="${currentView}"] span`)?.textContent.trim()} · iPromotion`;
+  const label = document.querySelector(`.nav-item[data-view="${currentView}"] span`) ?? document.querySelector(`.view[data-view="${currentView}"] h1`);
+  document.title = `${label?.textContent.trim()} · iPromotion`;
   document.querySelector('.app').classList.remove('menu-open');
   if (currentView === 'dashboard') showDashboard();
   else hideDashboard();
@@ -557,6 +558,19 @@ document.querySelector('.nav').addEventListener('click', (e) => {
   if (!a || e.metaKey || e.ctrlKey) return;
   e.preventDefault();
   navigate(a.getAttribute('href'));
+});
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-view-link]');
+  if (!a || e.metaKey || e.ctrlKey) return;
+  e.preventDefault();
+  navigate(a.getAttribute('href'));
+});
+// "Please check before you go" notices: closing one hides them all, remembered in this browser
+// (restored before painting by the inline script in index.html). The footer keeps the disclaimer.
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.data-note-close')) return;
+  document.querySelector('.app').classList.add('data-note-closed');
+  store.set('ipromotion.dataNoteClosed', true);
 });
 window.addEventListener('popstate', showView);
 showView();

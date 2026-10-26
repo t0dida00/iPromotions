@@ -263,7 +263,7 @@ app.delete('/api/expiry/:id', requireUser, async (req, res) => {
 });
 
 // Sidebar sections are real URLs; they all load the same page, which shows the matching section.
-app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/food', '/follow'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
+app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/food', '/follow', '/privacy', '/terms', '/contact'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
 // Scheduled refreshes: sections in `sectionSchedules` (e.g. Food, daily) run on their own cron; the
 // main schedule (weekly) refreshes every other store. The first start still crawls everything, and
