@@ -1,8 +1,10 @@
 // "Follow your discount": markets often discount meat and other fresh food on its last day. The
-// user photographs products, presses "Mark the dates", and the server's vision model reads each
-// label's use-by or best-before date (POST /api/expiry/scan, src/expiry.js). Found dates are saved
-// to the user's account and shown on a month calendar and an upcoming list, each downloadable as an
-// .ics event. Signed-in users only; photos are shrunk here and never stored.
+// user photographs products, presses "Check", and the server's vision model reads each label's
+// use-by or best-before date (POST /api/expiry/scan, src/expiry.js). The dates found are listed in a
+// review dialog where the user fixes the product name, date and kind, adds a location, and saves
+// (or cancels). Saved dates go to the user's account and are shown on a month calendar and an
+// upcoming list, each downloadable as an .ics event. Signed-in users only; photos are shrunk here
+// and never stored.
 import { idToken, openDialog } from './auth.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -22,10 +24,14 @@ const REASONS = {
 
 let root = null;
 let user = null;
-let photos = []; // { id, thumb, data, status: preparing|ready|checking|done|failed, result, error }
+// status: preparing → ready → checking → found (read, not saved yet) → done (saved), or failed
+let photos = []; // { id, thumb, data, status, result, error }
 let entries = null; // saved dates from the server; null until loaded
 let month = firstOfMonth(new Date());
 let loadError = '';
+let dialog = null; // the review dialog (<dialog>), created on mount
+const LAST_LOCATION = 'ipromotion.expiryLocation'; // suggested for new rows, in this browser only
+const lastLocation = () => { try { return localStorage.getItem(LAST_LOCATION) ?? ''; } catch { return ''; } };
 
 // ── Dates (local calendar days as YYYY-MM-DD) ────────────────────────────────────────────────
 const pad = (n) => String(n).padStart(2, '0');
@@ -96,20 +102,15 @@ function removePhoto(id) {
   render();
 }
 
-// Checks one photo; a found date is saved to the calendar right away.
+// Reads one photo's date. Nothing is saved here: found dates wait for the review dialog.
 async function check(p) {
   Object.assign(p, { status: 'checking', error: '', result: null });
   render();
   try {
     const r = await api('/api/expiry/scan', { method: 'POST', body: { image: p.data }, timeout: CLIENT_TIMEOUT_MS });
     p.result = r;
-    if (r.found) {
-      const saved = await api('/api/expiry', { method: 'POST', body: { kind: r.kind, date: r.date, product: r.product } });
-      entries = [...(entries ?? []), saved];
-      p.status = 'done';
-    } else {
-      Object.assign(p, { status: 'failed', error: REASONS[r.reason] ?? REASONS.no_date });
-    }
+    if (r.found) Object.assign(p, { status: 'found', draft: { kind: r.kind, date: r.date, product: r.product ?? '', location: lastLocation() } });
+    else Object.assign(p, { status: 'failed', error: REASONS[r.reason] ?? REASONS.no_date });
   } catch (e) {
     const timedOut = e.name === 'TimeoutError' || e.name === 'AbortError';
     Object.assign(p, { status: 'failed', error: timedOut ? REASONS.timeout : e.message });
@@ -118,24 +119,119 @@ async function check(p) {
   render();
 }
 
-// "Mark the dates": every photo not yet checked, a few at a time.
-async function markAll() {
+// "Check": every photo not yet checked, a few at a time; then the dates found go to the review.
+async function checkAll() {
   const queue = photos.filter((p) => p.status === 'ready');
   await Promise.all(Array.from({ length: Math.min(PARALLEL, queue.length) }, async () => {
     while (queue.length) await check(queue.shift());
   }));
+  openReview();
 }
 
-// A date typed in by hand for a photo the model couldn't read.
-async function addByHand(p, date) {
-  try {
-    const saved = await api('/api/expiry', { method: 'POST', body: { kind: 'use_by', date, product: p.result?.product } });
-    entries = [...(entries ?? []), saved];
-    Object.assign(p, { status: 'done', error: '', result: { found: true, kind: 'use_by', date, product: saved.product } });
-  } catch (e) {
-    p.error = e.message;
-  }
+// A date typed in by hand for a photo the model couldn't read: reviewed like the others.
+function addByHand(p, date) {
+  Object.assign(p, { status: 'found', error: '', draft: { kind: 'use_by', date, product: p.result?.product ?? '', location: lastLocation() } });
   render();
+  openReview();
+}
+
+// ── Review dialog: the dates found, editable, then Save or Cancel ─────────────────────────────
+const pending = () => photos.filter((p) => p.status === 'found');
+
+function openReview() {
+  const list = pending();
+  if (!list.length || !dialog) return;
+  dialog.innerHTML = `<form class="review" method="dialog">
+    <h2 id="review-title">${list.length === 1 ? 'Date found' : `${list.length} dates found`}</h2>
+    <p class="hint">Check each date, name the product and add where you saw it. Nothing is saved until you press Save.</p>
+    <ul class="review-list">${list.map(reviewRow).join('')}</ul>
+    <p class="review-error" role="alert" hidden></p>
+    <div class="review-actions">
+      <button class="btn" type="button" data-review="cancel">Cancel</button>
+      <button class="btn btn-primary" type="submit" data-review="save">Save${list.length > 1 ? ` ${list.length} dates` : ''}</button>
+    </div>
+  </form>`;
+  if (!dialog.open) dialog.showModal();
+}
+
+function reviewRow(p) {
+  const d = p.draft;
+  return `<li class="review-row" data-id="${p.id}">
+    <img class="review-thumb" src="${esc(p.thumb)}" alt="" />
+    <div class="review-fields">
+      <label class="review-field review-product"><span>Product name</span>
+        <input name="product" value="${esc(d.product)}" placeholder="e.g. Chicken fillet" maxlength="60" required /></label>
+      <label class="review-field"><span>Date</span>
+        <input name="date" type="date" value="${esc(d.date)}" required /></label>
+      <label class="review-field"><span>Type</span>
+        <select name="kind">${Object.entries(KIND).map(([k, label]) => `<option value="${k}"${k === d.kind ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+      <label class="review-field review-location"><span>Location</span>
+        <input name="location" value="${esc(d.location)}" placeholder="e.g. Prisma Linnanmaa" maxlength="60" /></label>
+    </div>
+    <button class="review-x" type="button" data-review="drop" aria-label="Leave this date out" title="Leave this date out">×</button>
+  </li>`;
+}
+
+// Copies what the user typed back into each photo's draft (so Cancel keeps their edits).
+function readDrafts() {
+  for (const row of dialog.querySelectorAll('.review-row')) {
+    const p = photos.find((x) => x.id === row.dataset.id);
+    if (!p) continue;
+    const val = (name) => row.querySelector(`[name="${name}"]`).value.trim();
+    p.draft = { product: val('product'), date: val('date'), kind: val('kind'), location: val('location') };
+  }
+}
+
+async function saveReview() {
+  readDrafts();
+  const list = pending();
+  const button = dialog.querySelector('[data-review="save"]');
+  button.disabled = true;
+  button.textContent = 'Saving…';
+  const failed = [];
+  for (const p of list) {
+    try {
+      const saved = await api('/api/expiry', { method: 'POST', body: p.draft });
+      entries = [...(entries ?? []), saved];
+      Object.assign(p, { status: 'done', result: { ...p.result, found: true, ...saved } });
+    } catch (e) {
+      failed.push(e.message);
+      if (e.status === 401) openDialog();
+    }
+  }
+  const location = list.map((p) => p.draft.location).find(Boolean);
+  if (location) try { localStorage.setItem(LAST_LOCATION, location); } catch {}
+  render();
+  if (!failed.length) return dialog.close();
+  openReview(); // only the rows that didn't save are left
+  const err = dialog.querySelector('.review-error');
+  err.textContent = `${failed.length === 1 ? 'One date' : `${failed.length} dates`} couldn't be saved: ${failed[0]}`;
+  err.hidden = false;
+}
+
+function mountReview() {
+  dialog = document.createElement('dialog');
+  dialog.className = 'login-dialog review-dialog';
+  dialog.setAttribute('aria-labelledby', 'review-title');
+  document.body.append(dialog);
+  dialog.addEventListener('click', (e) => {
+    const act = e.target.closest('[data-review]')?.dataset.review;
+    if (act === 'cancel') {
+      readDrafts();
+      dialog.close();
+    } else if (act === 'drop') {
+      readDrafts();
+      // Left out = not wanted: the photo goes too (checking it again would only cost another read).
+      removePhoto(e.target.closest('.review-row').dataset.id);
+      if (pending().length) openReview();
+      else dialog.close();
+    }
+  });
+  dialog.addEventListener('submit', (e) => {
+    e.preventDefault();
+    saveReview();
+  });
+  dialog.addEventListener('cancel', () => readDrafts()); // Esc: same as Cancel
 }
 
 // ── Saved dates ──────────────────────────────────────────────────────────────────────────────
@@ -211,6 +307,7 @@ function render() {
 
 function photoCard() {
   const ready = photos.filter((p) => p.status === 'ready').length;
+  const toReview = pending().length;
   const busy = photos.some((p) => p.status === 'checking' || p.status === 'preparing');
   return `<div class="follow-card">
     <div class="follow-head">
@@ -223,7 +320,8 @@ function photoCard() {
     ${photos.length ? `<ul class="tray">${photos.map(photoItem).join('')}</ul>` : '<p class="tray-empty">No photos yet.</p>'}
     <div class="follow-actions">
       ${photos.length && !busy ? '<button class="btn" data-act="clear">Clear photos</button>' : ''}
-      <button class="btn btn-primary" data-act="mark" ${ready && !busy ? '' : 'disabled'}>Mark the dates${ready ? ` (${ready})` : ''}</button>
+      ${toReview && !busy ? `<button class="btn" data-act="review">Review &amp; save (${toReview})</button>` : ''}
+      <button class="btn btn-primary" data-act="check" ${ready && !busy ? '' : 'disabled'}>${busy && !ready ? 'Checking…' : 'Check'}${ready ? ` (${ready})` : ''}</button>
     </div>
   </div>`;
 }
@@ -234,13 +332,14 @@ function photoItem(p) {
     preparing: '<span class="tray-status">Preparing…</span>',
     ready: '<span class="tray-status">Ready</span>',
     checking: '<span class="tray-status busy"><span class="spin"></span>Reading date…</span>',
-    done: r ? `<span class="tray-status ok">${KIND[r.kind]} ${esc(fmtDay(r.date))}</span>` : '',
+    found: p.draft ? `<span class="tray-status">${KIND[p.draft.kind]} ${esc(fmtDay(p.draft.date))} · not saved</span>` : '',
+    done: r ? `<span class="tray-status ok">Saved · ${KIND[r.kind]} ${esc(fmtDay(r.date))}</span>` : '',
     failed: `<span class="tray-status bad">${esc(p.error)}</span>`,
   }[p.status];
   return `<li class="tray-item ${p.status}">
     <div class="tray-thumb"><img src="${esc(p.thumb)}" alt="" />
       ${p.status !== 'checking' ? `<button class="tray-x" data-act="remove" data-id="${p.id}" aria-label="Remove photo">×</button>` : ''}</div>
-    ${r?.product ? `<b class="tray-name">${esc(r.product)}</b>` : ''}
+    ${(p.draft?.product || r?.product) ? `<b class="tray-name">${esc(p.draft?.product || r.product)}</b>` : ''}
     ${status}
     ${p.status === 'failed' && p.data ? `<div class="tray-fix">
       <button class="btn btn-sm" data-act="retry" data-id="${p.id}">Retry</button>
@@ -310,13 +409,14 @@ function upcomingCard() {
           <button class="btn btn-sm btn-icon" data-act="delete" data-id="${e.id}" aria-label="Delete">×</button>
         </span>
       </li>`;
-    }).join('')}</ul>` : '<p class="tray-empty">No dates yet. Add photos above and press <b>Mark the dates</b>.</p>'}
+    }).join('')}</ul>` : '<p class="tray-empty">No dates yet. Add photos above and press <b>Check</b>.</p>'}
   </div>`;
 }
 
 // ── Wiring ───────────────────────────────────────────────────────────────────────────────────
 export function mountFollow(section) {
   root = section;
+  mountReview();
   root.addEventListener('click', (e) => {
     const el = e.target.closest('[data-act]');
     if (!el || el.tagName === 'INPUT') return;
@@ -327,7 +427,8 @@ export function mountFollow(section) {
       photos.forEach((p) => URL.revokeObjectURL(p.thumb));
       photos = [];
       render();
-    } else if (act === 'mark') markAll();
+    } else if (act === 'check') checkAll();
+    else if (act === 'review') openReview();
     else if (act === 'retry') check(photos.find((p) => p.id === id));
     else if (act === 'delete') deleteEntry(id);
     else if (act === 'ics') downloadIcs(entries.filter((x) => x.id === id), 'expiry-date.ics');

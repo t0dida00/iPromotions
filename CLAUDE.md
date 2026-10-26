@@ -108,12 +108,13 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   de Firebase en `Authorization: Bearer` y lo verifica `src/auth.js` (sin `firebase-admin`):
   `requireOwner` (refrescos) y `requireUser` (deja `req.user = { uid, email }`).
 - **Follow your discount** (`/follow`, `src/expiry.js` + `public/expiry.js`): el usuario fotografía
-  etiquetas, "Mark the dates" envía cada foto (reducida en el navegador a ≤ 768 px) a
+  etiquetas, "Check" envía cada foto (reducida en el navegador a ≤ 768 px) a
   `POST /api/expiry/scan`, que llama a un modelo de visión de Hugging Face (`NUXT_HF_VISION_MODEL`,
   por defecto `Qwen/Qwen3-VL-30B-A3B-Instruct:fastest`) con `max_tokens: 100` y corte a los 8 s
   (~500 tokens y 1–2 s por foto). El modelo devuelve la fecha y **las palabras impresas junto a
   ella**; el tipo (use-by / best-before / fecha de envasado, que se descarta) lo decide `KINDS` en
-  código, porque el modelo los confunde. Las fechas se guardan por usuario en la tabla `expiry_entries`
+  código, porque el modelo los confunde. Las fechas encontradas no se guardan solas: un diálogo de revisión
+  (nombre, fecha, tipo, ubicación; Save / Cancel) las guarda con `POST /api/expiry`. Las fechas se guardan por usuario en la tabla `expiry_entries`
   (sin `DATABASE_URL`, en `data/expiry.json`; CRUD en `/api/expiry`); las fotos no se guardan.
   Límites: `rateLimits.scan` por IP y `expiryScansPerDay` por usuario, contados en la tabla
   `rate_counters` para que valgan entre instancias de Vercel.
