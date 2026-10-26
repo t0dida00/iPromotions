@@ -9,7 +9,7 @@
   ],
   "functions": {
     "api/index.js": {
-      "maxDuration": 60,
+      "maxDuration": 120,
       "memory": 2048,
       "includeFiles": "{src/db/schema.sql,node_modules/@sparticuz/chromium/bin/**}"
     }
