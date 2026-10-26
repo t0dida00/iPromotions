@@ -467,6 +467,10 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .price-intro h2 { margin: 0 0 4px; font-size: 20px; }
 .price-intro .hint { max-width: 680px; font-size: 14px; }
 .price-balance { display: inline-block; margin: 4px 0 0; padding: 6px 12px; border-radius: 999px; background: #e3efe8; color: #0d5e48; font-size: 13px; }
+.price-scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 10px 20px; margin: 16px 0 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 14px; line-height: 1.5; }
+.price-scope p { margin: 0; color: var(--muted); }
+.price-scope b { color: var(--text); }
+.price-scope a { color: var(--accent); }
 .price-notice { margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; font-size: 14px; }
 .price-notice.ok { background: #e3efe8; color: #0d5e48; }
 .price-notice.bad { background: #f8e1e5; color: #9b1f3d; }
