@@ -113,7 +113,10 @@ const byDate = (a, b) => a.date.localeCompare(b.date) || a.addedAt.localeCompare
 // Rows in the same shape as the file entries (dates as YYYY-MM-DD, no time zone shifts).
 const COLUMNS = `id, kind, to_char(date, 'YYYY-MM-DD') as date, product, location,
   to_char(added_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "addedAt"`;
-const sql = async (text, params) => (await ensureDb(), (await query(text, params)).rows);
+const sql = async (text, params) => {
+  await ensureDb();
+  return (await query(text, params)).rows;
+};
 
 export async function listEntries(uid) {
   if (dbEnabled()) return sql(`select ${COLUMNS} from expiry_entries where firebase_uid = $1 order by date, added_at`, [uid]);

@@ -204,7 +204,7 @@ app.get('/api/wolt', async (req, res) => {
     }
   };
   if (await cachedOffers(lat, lon)) return send();
-  woltLimit(req, res, send);
+  await woltLimit(req, res, send);
 });
 
 // Follow your discount: read the expiry date from a product photo, and keep each signed-in user's
@@ -293,6 +293,14 @@ function nextSchedule() {
     all: schedules.map((s) => ({ label: s.label, cron: s.cron, nextRun: s.task.getNextRun()?.toISOString() ?? null })),
   };
 }
+
+// Last stop for unexpected errors: log the details, send the visitor plain words (never a stack trace).
+app.use((err, _req, res, _next) => {
+  console.error('[server]', err);
+  if (res.headersSent) return;
+  const status = err.status >= 400 && err.status < 500 ? err.status : 500; // e.g. 400 bad JSON, 413 too large
+  res.status(status).json({ error: status < 500 ? 'The request could not be read.' : 'Something went wrong. Please try again in a moment.' });
+});
 
 // Below: only when running as a normal server (locally, or any host with a lasting process).
 if (!ON_VERCEL) await startServer();

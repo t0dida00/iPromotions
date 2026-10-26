@@ -25,7 +25,7 @@ pool?.on('error', (e) => console.error('[db]', e.message)); // idle client dropp
 if (pool && process.env.VERCEL) attachDatabasePool(pool);
 
 export const dbEnabled = () => Boolean(pool);
-const OWNER_EMAIL = () => (process.env.OWNER_EMAIL || 'ddkhoa97@gmail.com').trim().toLowerCase();
+const OWNER_EMAIL = () => (process.env.OWNER_EMAIL ?? '').trim().toLowerCase(); // empty = no owner
 
 // Creates the tables if they don't exist yet. Call once before serving.
 export async function initDb() {
@@ -77,7 +77,7 @@ export async function kvSet(key, value) {
 export async function upsertUser(claims) {
   const email = String(claims.email ?? '').toLowerCase();
   if (!email) throw new Error('Account has no email');
-  const role = claims.email_verified && email === OWNER_EMAIL() ? 'owner' : 'user';
+  const role = claims.email_verified && OWNER_EMAIL() && email === OWNER_EMAIL() ? 'owner' : 'user';
   const client = await pool.connect();
   try {
     await client.query('begin');
