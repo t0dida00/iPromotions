@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
 import path from 'node:path';
-import { DATA_DIR } from './store.js';
+import { DATA_DIR, readJson, writeJson } from './store.js';
 
 // "Campaign analyst": an LLM (Hugging Face Inference, OpenAI-compatible chat API) that reads the
 // text gathered around each hero banner — headline, terms, link, the linked page's title and
@@ -37,13 +36,7 @@ const PROMPT_VERSION = 2;
 
 export const analystEnabled = () => Boolean(process.env.NUXT_HF_TOKEN);
 
-async function readCache() {
-  try {
-    return JSON.parse(await fs.readFile(CACHE_FILE, 'utf8'));
-  } catch {
-    return {};
-  }
-}
+const readCache = () => readJson(CACHE_FILE, {});
 
 const keyOf = (store, b) => crypto.createHash('sha1').update(JSON.stringify([PROMPT_VERSION, store, b.text, b.link])).digest('hex');
 
@@ -83,8 +76,7 @@ export async function analyzeBanners(store, banners, log = console.log) {
       if (t) cache[keys[t.i]] = { ...c, index: undefined, analyzedAt: new Date().toISOString() };
     }
     log(`  analyst: ${todo.length} new banner(s) for ${store} analysed in ${Math.round((Date.now() - started) / 1000)}s`);
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 1));
+    await writeJson(CACHE_FILE, cache);
   } else if (todo.length) {
     log(`  analyst: NUXT_HF_TOKEN not set — ${todo.length} banner(s) for ${store} not analysed`);
   }

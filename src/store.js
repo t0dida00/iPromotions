@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import config from '../config.js';
+import { kvGet, kvSet } from './db.js';
 
 // Data lives in small JSON files, one per sidebar section, so a page only downloads the section
 // it shows:
@@ -15,16 +16,39 @@ export const segmentFile = (segment) => path.join(DATA_DIR, `deals-${segment}.js
 export const segmentOf = (key) => config.sources[key]?.segment ?? 'groceries';
 export const SEGMENTS = [...new Set(Object.keys(config.sources).map(segmentOf))];
 
+// Where the data lives. Locally: JSON files in data/. Online (Vercel functions have no lasting disk,
+// and the crawler runs on GitHub Actions): DATA_STORE=postgres keeps each "file" as a row in the
+// kv table of DATABASE_URL, keyed by its file name. Callers don't notice the difference.
+export const useDb = () => process.env.DATA_STORE === 'postgres';
+const keyOf = (file) => path.basename(file);
+
 export async function readJson(file, fallback) {
   try {
+    if (useDb()) return (await kvGet(keyOf(file)))?.value ?? fallback;
     return JSON.parse(await fs.readFile(file, 'utf8'));
-  } catch {
+  } catch (e) {
+    if (useDb()) console.error(`[store] could not read ${keyOf(file)}: ${e.message}`);
     return fallback;
+  }
+}
+
+// The stored text and when it last changed, for ETags (null if it doesn't exist yet).
+export async function readRaw(file) {
+  if (useDb()) {
+    const row = await kvGet(keyOf(file));
+    return row && { body: JSON.stringify(row.value), mtime: new Date(row.updatedAt) };
+  }
+  try {
+    const [body, st] = await Promise.all([fs.readFile(file, 'utf8'), fs.stat(file)]);
+    return { body, mtime: st.mtime };
+  } catch {
+    return null;
   }
 }
 
 // Write to a temp file and rename it into place, so a crash mid-write never leaves a half file.
 export async function writeJson(file, data) {
+  if (useDb()) return kvSet(keyOf(file), data);
   await fs.mkdir(DATA_DIR, { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data));
@@ -39,6 +63,7 @@ export const writeSegment = (segment, deals, updatedAt) => writeJson(segmentFile
 // One-time move from the old single data/deals.json to per-section files. The old file is kept
 // as deals.json.bak.
 export async function migrateLegacy() {
+  if (useDb()) return false;
   const legacy = await readJson(LEGACY_FILE, null);
   if (!legacy || (await readJson(STATUS_FILE, null))) return false;
   const bySegment = Object.fromEntries(SEGMENTS.map((s) => [s, []]));

@@ -53,7 +53,17 @@ por índice único parcial; el owner es el email verificado de `OWNER_EMAIL`) y 
 Necesita `DATABASE_URL` (local: `docker compose up -d`, puerto 5434); sin ella el sitio funciona sin
 cuentas y el owner se deduce del token.
 
-**Almacenamiento (`src/store.js`):** JSON en `data/` (en `.gitignore`), escritura atómica
+**Despliegue online (gratis):** Vercel (estático `public/` + `api/index.js`, que importa `app` de
+`src/server.js`; con `VERCEL` no hay `listen`, ni cron real, ni crawl al arrancar), Neon (Postgres) y
+GitHub Actions (`.github/workflows/crawl.yml`, `npm run crawl -- --segment … --trigger …`). El botón
+Refresh del owner en Vercel lanza el workflow (`src/github.js`, `GITHUB_TOKEN`/`GITHUB_REPO`). En
+Vercel Chromium viene de `@sparticuz/chromium` (`src/browser.js`, usa `playwright-core`).
+`scripts/import-data.js` copia `data/*.json` a la tabla `kv`.
+
+**Almacenamiento (`src/store.js`):** con `DATA_STORE=postgres` (Vercel y GitHub Actions) cada
+"fichero" es una fila de la tabla `kv` (clave = nombre del fichero) vía las mismas
+`readJson/writeJson/readRaw`; el progreso del crawl se guarda en `crawl-progress.json`
+(`currentProgress()` en `src/crawl.js`) para que la web lo vea. Sin esa variable: JSON en `data/` (en `.gitignore`), escritura atómica
 (tmp + rename). `deals-<segment>.json` por sección y `status.json` con estado por tienda,
 historial de las últimas 20 ejecuciones y hora de actualización por sección. `migrateLegacy()`
 convierte el antiguo `data/deals.json` único.

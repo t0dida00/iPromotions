@@ -15,6 +15,14 @@ create table if not exists users (
 -- At most one owner (the account in OWNER_EMAIL).
 create unique index if not exists users_one_owner on users ((role)) where role = 'owner';
 
+-- Deals, status and caches when DATA_STORE=postgres (online: Vercel + GitHub Actions). One row per
+-- former data/ file, keyed by its name (e.g. 'deals-food.json', 'status.json'); src/store.js.
+create table if not exists kv (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
 -- Starred categories per account (logged-out visitors keep theirs in the browser).
 create table if not exists favorites (
   user_id    int  not null references users(id) on delete cascade,

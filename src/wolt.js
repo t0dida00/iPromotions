@@ -1,5 +1,7 @@
 import config from '../config.js';
+import path from 'node:path';
 import { withBrowser, declineCookies } from './browser.js';
+import { DATA_DIR, readJson, writeJson, useDb } from './store.js';
 
 // Wolt offers near a location, for the "Wolt offers near you" panel in Food Promotions.
 //
@@ -22,22 +24,33 @@ let queue = Promise.resolve(); // one Chromium at a time
 // Round to ~1 km so nearby visitors share a lookup (and exact positions aren't kept).
 export const areaKey = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
 
-export function cachedOffers(lat, lon) {
-  const hit = cache.get(areaKey(lat, lon));
-  return hit && Date.now() - hit.at < TTL_MS ? hit.data : null;
+// Online each function instance has its own memory, so areas are also cached in the database
+// (DATA_STORE=postgres), one row per area: wolt-<lat>,<lon>.json.
+const sharedFile = (key) => path.join(DATA_DIR, `wolt-${key}.json`);
+const fresh = (hit) => (hit && Date.now() - hit.at < TTL_MS ? hit.data : null);
+
+export async function cachedOffers(lat, lon) {
+  const key = areaKey(lat, lon);
+  const local = fresh(cache.get(key));
+  if (local || !useDb()) return local;
+  const shared = await readJson(sharedFile(key), null);
+  if (fresh(shared)) cache.set(key, shared);
+  return fresh(shared);
 }
 
-export function woltOffers(lat, lon, log = console.log) {
+export async function woltOffers(lat, lon, log = console.log) {
   const key = areaKey(lat, lon);
-  const hit = cachedOffers(lat, lon);
-  if (hit) return Promise.resolve(hit);
+  const hit = await cachedOffers(lat, lon);
+  if (hit) return hit;
   if (pending.has(key)) return pending.get(key);
   const [rlat, rlon] = key.split(',').map(Number);
   const job = (queue = queue.catch(() => {}).then(() => lookup(rlat, rlon, log)))
     .then((data) => {
+      const entry = { at: Date.now(), data };
       cache.delete(key);
-      cache.set(key, { at: Date.now(), data });
+      cache.set(key, entry);
       if (cache.size > MAX_CACHED) cache.delete(cache.keys().next().value); // oldest first
+      if (useDb()) writeJson(sharedFile(key), entry).catch((e) => console.error('[wolt] cache:', e.message));
       return data;
     })
     .finally(() => pending.delete(key));

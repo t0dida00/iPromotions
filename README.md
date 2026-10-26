@@ -34,6 +34,35 @@ npm start          # http://localhost:3000 — crawls on first start, then every
 npm run crawl      # one-off crawl from the terminal
 ```
 
+## Deploy online (free: Vercel + Neon + GitHub Actions)
+
+| Part | Runs on | Notes |
+| --- | --- | --- |
+| Website + API | **Vercel** (Hobby, free for personal use) | `public/` from the CDN; `/api/*` is the Express app as one function (`api/index.js`, `vercel.json`) |
+| Data | **Neon** Postgres (free) | users, favorites, and deals/status/caches in the `kv` table (`DATA_STORE=postgres`) |
+| Crawling | **GitHub Actions** (free minutes) | `.github/workflows/crawl.yml`: Wednesdays (all but Food), daily (Food), and the owner's Refresh button |
+| Wolt lookups | Vercel function | Chromium from `@sparticuz/chromium`; results cached per area in the database |
+
+One-time setup:
+1. **Neon** (neon.tech): create a project, copy the **pooled** connection string
+   (`…-pooler…/neondb?sslmode=require`).
+2. Copy today's data in: `DATABASE_URL='<neon url>' node scripts/import-data.js`.
+3. **GitHub token** (Settings → Developer settings → Fine-grained tokens): only this repository,
+   permission **Actions: Read and write**.
+4. **Vercel** → Add New Project → import `t0dida00/iPromotions` → Environment Variables:
+   `DATA_STORE=postgres`, `DATABASE_URL`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`,
+   `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID`, `OWNER_EMAIL`, `NUXT_HF_TOKEN`, `NUXT_HF_MODEL`,
+   `NUXT_HF_VISION_MODEL` (if used), `GITHUB_TOKEN`, `GITHUB_REPO=t0dida00/iPromotions` → Deploy.
+5. **GitHub repo → Settings → Secrets and variables → Actions**: `DATABASE_URL`, `NUXT_HF_TOKEN`,
+   `NUXT_HF_MODEL`.
+6. **Firebase console → Authentication → Settings → Authorized domains**: add your
+   `<project>.vercel.app` domain, or Google sign-in fails there.
+7. Actions tab → "Crawl stores" → Run workflow, to check the crawler can write to Neon.
+
+Online, a Refresh click starts the GitHub job (starts in ~30 s, a full crawl takes a few minutes);
+the buttons show "Refreshing…" meanwhile. Rate limits are per function instance there (best effort).
+Locally nothing changes: files in `data/`, in-process crawls and cron.
+
 ## How it works
 
 | Source | Method |

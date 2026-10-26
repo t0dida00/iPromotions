@@ -1,11 +1,19 @@
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-core';
 
 export const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 
 // `contextOptions` are added to the browser context's, e.g. a geolocation for Wolt.
+// Locally and on GitHub Actions: the Chromium that `playwright install` downloads. In a Vercel
+// function (no browser installed, small disk): the compact build from @sparticuz/chromium.
+async function launchOptions() {
+  if (!process.env.VERCEL) return { headless: true };
+  const { default: lambdaChromium } = await import('@sparticuz/chromium');
+  return { headless: true, executablePath: await lambdaChromium.executablePath(), args: lambdaChromium.args };
+}
+
 export async function withBrowser(fn, contextOptions = {}) {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(await launchOptions());
   try {
     const context = await browser.newContext({
       locale: 'fi-FI',

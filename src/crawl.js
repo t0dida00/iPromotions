@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import config from '../config.js';
-import { readStatus, writeStatus, readSegment, writeSegment, segmentOf, summarize, migrateLegacy, DATA_DIR } from './store.js';
+import path from 'node:path';
+import { readStatus, writeStatus, readSegment, writeSegment, segmentOf, summarize, migrateLegacy, DATA_DIR, readJson, writeJson, useDb } from './store.js';
 import { crawlTokmanni } from './crawlers/tokmanni.js';
 import { crawlKRuoka } from './crawlers/kruoka.js';
 import { crawlPrisma } from './crawlers/prisma.js';
@@ -41,6 +42,22 @@ let queued = null; // stores asked for while a crawl was running: null, 'all' or
 export const progress = { startedAt: null, trigger: null, scope: [], running: [], done: [], queued: [], sources: {} };
 const MAX_RUNS = 20;
 
+// Online the crawl runs on GitHub Actions while the site runs on Vercel, so the progress above is
+// also saved (DATA_STORE=postgres) for the site to read. A saved progress older than STALE_MS is
+// ignored (e.g. a job that was cancelled before it could clear it).
+const PROGRESS_FILE = path.join(DATA_DIR, 'crawl-progress.json');
+const STALE_MS = 45 * 60_000;
+export const saveProgress = (extra = {}) =>
+  useDb() ? writeJson(PROGRESS_FILE, { ...progress, active: true, savedAt: new Date().toISOString(), ...extra }).catch((e) => console.error('[crawl] progress:', e.message)) : Promise.resolve();
+
+// The crawl in progress, here or (online) on GitHub Actions; null when none.
+export async function currentProgress() {
+  if (running) return { ...progress };
+  if (!useDb()) return null;
+  const saved = await readJson(PROGRESS_FILE, null);
+  return saved?.active && Date.now() - Date.parse(saved.savedAt) < STALE_MS ? saved : null;
+}
+
 // Stores that have a crawler (brochure-only stores don't).
 export const crawlableStores = () =>
   Object.entries(config.sources).filter(([, o]) => o.enabled && o.type).map(([k]) => k);
@@ -73,6 +90,7 @@ export function crawlAll(log = console.log, trigger = 'cli', only = null) {
       queued: [],
       sources: {},
     });
+    await saveProgress();
     await migrateLegacy();
     const prev = await readStatus();
     // Drop status for stores no longer in the config (e.g. the old combined "kruoka" source).
@@ -87,6 +105,7 @@ export function crawlAll(log = console.log, trigger = 'cli', only = null) {
     async function crawlOne([key, opts]) {
       const started = Date.now();
       progress.running.push(key);
+      saveProgress();
       log(`[crawl] ${key}…`);
       try {
         results[key] = (await CRAWLERS[opts.type](opts, log)).map((d) => enrich(d, key, opts.segment));
@@ -112,6 +131,7 @@ export function crawlAll(log = console.log, trigger = 'cli', only = null) {
       progress.sources[key] = sources[key]; // shown on the dashboard before the run is saved
       progress.running = progress.running.filter((k) => k !== key);
       progress.done.push(key);
+      await saveProgress();
     }
 
     // Simple worker pool: each worker takes the next store until none are left.
@@ -146,9 +166,10 @@ export function crawlAll(log = console.log, trigger = 'cli', only = null) {
     const status = { updatedAt: finishedAt, sources, runs: [run, ...(prev.runs ?? [])].slice(0, MAX_RUNS), segments: sectionTimes };
     await writeStatus(status);
     return status;
-  })().finally(() => {
+  })().finally(async () => {
     running = null;
     progress.running = [];
+    await saveProgress({ active: false });
   });
   return running;
 }
@@ -176,8 +197,19 @@ function enrich(d, source, segment = 'groceries') {
   };
 }
 
-// `npm run crawl` — one-off crawl from the command line.
+// `npm run crawl` — one-off crawl from the command line (also what GitHub Actions runs online).
+//   npm run crawl                                   every store
+//   npm run crawl -- --segment food,clothing        only those sections' stores
+//   npm run crawl -- --trigger schedule             recorded in the run history (default "cli")
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const status = await crawlAll();
-  console.log(`Saved ${status.runs[0].deals} deals to ${DATA_DIR}`);
+  const arg = (name) => {
+    const i = process.argv.indexOf(`--${name}`);
+    return i > 0 ? process.argv[i + 1] : null;
+  };
+  const segs = arg('segment')?.split(',').map((s) => s.trim()).filter(Boolean);
+  const only = segs?.length ? crawlableStores().filter((k) => segs.includes(segmentOf(k))) : null;
+  if (segs?.length && !only.length) throw new Error(`No stores in section(s): ${segs.join(', ')}`);
+  const status = await crawlAll(console.log, arg('trigger') ?? 'cli', only);
+  console.log(`Saved ${status.runs[0].deals} deals ${useDb() ? 'to the database' : `to ${DATA_DIR}`}`);
+  if (useDb()) process.exit(0); // close the database pool
 }

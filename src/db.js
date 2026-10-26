@@ -24,6 +24,25 @@ export async function initDb() {
   return true;
 }
 
+// ── Key/value documents (src/store.js when DATA_STORE=postgres) ─────────────────────────────────
+let ready = null;
+export const ensureDb = () => (ready ??= initDb().catch((e) => ((ready = null), Promise.reject(e))));
+
+export async function kvGet(key) {
+  await ensureDb();
+  const { rows } = await pool.query('select value, updated_at from kv where key = $1', [key]);
+  return rows[0] ? { value: rows[0].value, updatedAt: rows[0].updated_at } : null;
+}
+
+export async function kvSet(key, value) {
+  await ensureDb();
+  await pool.query(
+    `insert into kv (key, value, updated_at) values ($1, $2, now())
+     on conflict (key) do update set value = excluded.value, updated_at = now()`,
+    [key, JSON.stringify(value)],
+  );
+}
+
 // Saves (or refreshes) the signed-in user from their verified token claims and returns the row.
 // The account whose verified email is OWNER_EMAIL becomes the owner; everyone else is a user.
 export async function upsertUser(claims) {
@@ -33,7 +52,6 @@ export async function upsertUser(claims) {
   const client = await pool.connect();
   try {
     await client.query('begin');
-    // Only one owner: if OWNER_EMAIL was changed to another account, the old owner becomes a user.
     if (role === 'owner') await client.query(`update users set role = 'user' where role = 'owner' and firebase_uid <> $1`, [claims.sub]);
     const { rows } = await client.query(
       `insert into users (firebase_uid, email, name, photo_url, role)

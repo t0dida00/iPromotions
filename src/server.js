@@ -3,12 +3,13 @@ import cron from 'node-cron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import config from '../config.js';
-import { crawlAll, isCrawling, progress, crawlableStores } from './crawl.js';
-import { readStatus, segmentFile, segmentOf, SEGMENTS, migrateLegacy } from './store.js';
+import { crawlAll, crawlableStores, currentProgress, saveProgress } from './crawl.js';
+import { readStatus, segmentFile, segmentOf, SEGMENTS, migrateLegacy, readRaw } from './store.js';
 import { rateLimit } from './rateLimit.js';
 import { authRouter, requireOwner, requireUser } from './auth.js';
 import { favoritesRouter } from './favorites.js';
-import { initDb } from './db.js';
+import { initDb, ensureDb, dbEnabled } from './db.js';
+import { dispatchCrawl } from './github.js';
 import { scanEnabled, scanLabel, listEntries, entryFrom, addEntry, changeEntry, removeEntry } from './expiry.js';
 import { woltOffers, cachedOffers } from './wolt.js';
 
@@ -16,10 +17,17 @@ const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'pu
 const startedAt = new Date().toISOString();
 const COOLDOWN_MS = (config.refreshCooldownMinutes ?? 10) * 60_000;
 
-const app = express();
+// Locally this file is the server (listen, cron, startup crawl). On Vercel, api/index.js imports
+// `app` and Vercel runs it as a function: no listen, and crawls run on GitHub Actions instead.
+const ON_VERCEL = Boolean(process.env.VERCEL);
+
+export const app = express();
 app.disable('x-powered-by');
-// Behind a reverse proxy, uncomment so rate limits see the visitor's IP instead of the proxy's:
-// app.set('trust proxy', 1);
+// Behind Vercel's proxy, req.ip must come from X-Forwarded-For so rate limits see the visitor.
+// Behind another reverse proxy, set this too.
+if (ON_VERCEL) app.set('trust proxy', true);
+// A function instance may start cold: make sure the tables exist before the first query.
+app.use((_req, _res, next) => (dbEnabled() ? ensureDb().catch((e) => console.error('[db]', e.message)).then(() => next()) : next()));
 
 // Per-IP limits against bots: strict for refreshes, generous for data, loose for files.
 const limits = config.rateLimits ?? {};
@@ -51,9 +59,9 @@ const storeList = () =>
       hasDeals: Boolean(s.type),
     }));
 
-// `crawling` is false, or the stores in the current run (plus any queued ones).
-const crawlingInfo = () =>
-  isCrawling() ? { scope: [...new Set([...progress.scope, ...progress.queued])], running: progress.running, done: progress.done } : false;
+// `crawling` is false, or the stores in the current run (plus any queued ones). The run may be in
+// this process or, online, on GitHub Actions (src/crawl.js currentProgress).
+const crawlingInfo = (p) => (p ? { scope: [...new Set([...(p.scope ?? []), ...(p.queued ?? [])])], running: p.running ?? [], done: p.done ?? [] } : false);
 
 // When each store may be refreshed again by hand (null = now).
 function cooldowns(sources) {
@@ -67,13 +75,13 @@ function cooldowns(sources) {
 
 // Small, frequently polled: stores, their status, per-section update times and refresh state.
 app.get('/api/meta', async (_req, res) => {
-  const status = await readStatus();
+  const [status, p] = await Promise.all([readStatus(), currentProgress()]);
   res.json({
     stores: storeList(),
     sources: status.sources,
     segments: status.segments ?? {},
     updatedAt: status.updatedAt,
-    crawling: crawlingInfo(),
+    crawling: crawlingInfo(p),
     cooldownUntil: cooldowns(status.sources),
     cooldownMinutes: COOLDOWN_MS / 60_000,
     schedule: config.schedule,
@@ -82,29 +90,32 @@ app.get('/api/meta', async (_req, res) => {
 
 // One section's deals, loaded only when that section is opened. Sent as the stored file with an
 // ETag, so a browser that already has this version gets a 304 instead of the data again.
-app.get('/api/deals', (req, res) => {
+app.get('/api/deals', async (req, res) => {
   const segment = String(req.query.segment ?? '');
   if (!SEGMENTS.includes(segment)) return res.status(400).json({ error: `segment must be one of: ${SEGMENTS.join(', ')}` });
   revalidate(res);
-  res.type('json').sendFile(segmentFile(segment), (err) => {
-    if (err && !res.headersSent) res.json({ updatedAt: null, deals: [] }); // section never crawled yet
-  });
+  const raw = await readRaw(segmentFile(segment)); // file locally, kv row online
+  if (!raw) return res.json({ updatedAt: null, deals: [] }); // section never crawled yet
+  const etag = `W/"${segment}-${raw.mtime.getTime()}"`;
+  res.setHeader('ETag', etag);
+  if (req.get('if-none-match') === etag) return res.status(304).end();
+  res.type('json').send(raw.body);
 });
 
 // Everything the dashboard shows; read from status.json only, no deal files.
 app.get('/api/status', async (_req, res) => {
-  const { updatedAt, sources, runs = [] } = await readStatus();
+  const [{ updatedAt, sources, runs = [] }, p] = await Promise.all([readStatus(), currentProgress()]);
   const until = cooldowns(sources);
   res.json({
     server: { startedAt, now: new Date().toISOString(), node: process.version },
     schedule: nextSchedule(),
-    crawling: isCrawling() ? { ...progress } : null,
+    crawling: p ?? null,
     updatedAt,
     totalDeals: crawlableStores().reduce((n, k) => n + (sources[k]?.count ?? 0), 0),
     stores: storeList().map((s) => ({
       ...s,
       // While a crawl runs, stores that already finished show this run's result.
-      status: (isCrawling() && progress.sources[s.key]) || sources[s.key] || null,
+      status: p?.sources?.[s.key] || sources[s.key] || null,
       deals: sources[s.key]?.count ?? 0,
       avgDiscount: sources[s.key]?.avgDiscount ?? null,
       cooldownUntil: until[s.key] ?? null,
@@ -127,7 +138,8 @@ app.post('/api/crawl', requireOwner, crawlLimit, async (req, res) => {
   const wanted = segment ? crawlableStores().filter((k) => segmentOf(k) === segment) : crawlableStores();
   if (!wanted.length) return res.status(400).json({ error: 'Unknown section' });
 
-  const busy = new Set([...(isCrawling() ? progress.scope.filter((k) => !progress.done.includes(k)) : []), ...progress.queued]);
+  const p = await currentProgress();
+  const busy = new Set([...(p ? (p.scope ?? []).filter((k) => !(p.done ?? []).includes(k)) : []), ...(p?.queued ?? [])]);
   const until = cooldowns((await readStatus()).sources);
   const skipped = wanted
     .filter((k) => busy.has(k) || until[k])
@@ -137,7 +149,22 @@ app.post('/api/crawl', requireOwner, crawlLimit, async (req, res) => {
     const next = skipped.map((s) => s.availableAt).filter(Boolean).sort()[0] ?? null;
     return res.status(429).json({ error: 'Already refreshing or refreshed recently', availableAt: next, skipped });
   }
-  const queued = isCrawling();
+  const queued = Boolean(p);
+  if (ON_VERCEL) {
+    // Online the crawl runs on GitHub Actions (.github/workflows/crawl.yml); it starts in ~30 s.
+    const segs = [...new Set(start.map(segmentOf))];
+    try {
+      await dispatchCrawl(segment ? segs : null);
+    } catch (e) {
+      console.error('[crawl] could not start the GitHub job:', e.message);
+      return res.status(502).json({ error: "Couldn't start the refresh right now. Please try again in a moment." });
+    }
+    // Show the section as busy until the job reports its own progress. A whole section is queued,
+    // since the job refreshes sections, not single stores.
+    const scope = crawlableStores().filter((k) => segs.includes(segmentOf(k)));
+    await saveProgress({ startedAt: null, trigger: 'manual', scope: [], running: [], done: [], queued: scope, sources: {} });
+    return res.status(202).json({ crawling: true, queued, stores: scope, skipped });
+  }
   crawlAll(console.log, 'manual', start).catch((e) => console.error('[crawl]', e));
   res.status(202).json({ crawling: true, queued, stores: start, skipped });
 });
@@ -166,7 +193,7 @@ app.get('/api/wolt', async (req, res) => {
       res.status(502).json({ error });
     }
   };
-  if (cachedOffers(lat, lon)) return send();
+  if (await cachedOffers(lat, lon)) return send();
   woltLimit(req, res, send);
 });
 
@@ -231,7 +258,8 @@ const schedules = [
   ...Object.entries(ownSchedule).map(([seg, expr]) => ({ label: SECTION_NAMES[seg] ?? seg, cron: expr, stores: () => crawlableStores().filter((k) => segmentOf(k) === seg) })),
 ].map((s) => ({
   ...s,
-  task: cron.schedule(s.cron, () => crawlAll(console.log, 'schedule', s.stores()).catch((e) => console.error('[cron]', e)), { timezone: config.timezone }),
+  // On Vercel the schedules only report their next run (GitHub Actions does the crawling).
+  task: cron.schedule(s.cron, ON_VERCEL ? () => {} : () => crawlAll(console.log, 'schedule', s.stores()).catch((e) => console.error('[cron]', e)), { timezone: config.timezone }),
 }));
 
 // The next scheduled refresh of any section, for the dashboard.
@@ -249,23 +277,28 @@ function nextSchedule() {
   };
 }
 
-// Accounts need the database; without DATABASE_URL (or if it can't be reached) the site still runs,
-// with favorites kept in each browser.
-try {
-  if (await initDb()) console.log('Database ready (users, favorites)');
-  else console.warn('DATABASE_URL is not set: accounts are off, favorites stay in each browser. See docker-compose.yml.');
-} catch (e) {
-  console.error(`Database unavailable (${e.message}): saved favorites won't work until it is reachable.`);
-}
+// Below: only when running as a normal server (locally, or any host with a lasting process).
+if (!ON_VERCEL) await startServer();
 
-app.listen(config.port, async () => {
-  console.log(`iPromotion running at http://localhost:${config.port} (crawl schedules: ${schedules.map((x) => `${x.label ?? "all"} "${x.cron}"`).join(", ")})`);
-  if (await migrateLegacy()) console.log('Moved data/deals.json into per-section files (old file kept as deals.json.bak)');
-  // First run: no data yet, so crawl right away.
-  const { updatedAt } = await readStatus();
-  if (!updatedAt) crawlAll(console.log, 'startup').catch((e) => console.error('[crawl]', e));
-}).on('error', (err) => {
-  // e.g. EADDRINUSE: another iPromotion server is already running on this port.
-  console.error(`Could not start on port ${config.port}: ${err.message}`);
-  process.exit(1);
-});
+async function startServer() {
+  // Accounts need the database; without DATABASE_URL (or if it can't be reached) the site still runs,
+  // with favorites kept in each browser.
+  try {
+    if (await initDb()) console.log('Database ready (users, favorites)');
+    else console.warn('DATABASE_URL is not set: accounts are off, favorites stay in each browser. See docker-compose.yml.');
+  } catch (e) {
+    console.error(`Database unavailable (${e.message}): saved favorites won't work until it is reachable.`);
+  }
+
+  app.listen(config.port, async () => {
+    console.log(`iPromotion running at http://localhost:${config.port} (crawl schedules: ${schedules.map((x) => `${x.label ?? "all"} "${x.cron}"`).join(", ")})`);
+    if (await migrateLegacy()) console.log('Moved data/deals.json into per-section files (old file kept as deals.json.bak)');
+    // First run: no data yet, so crawl right away.
+    const { updatedAt } = await readStatus();
+    if (!updatedAt) crawlAll(console.log, 'startup').catch((e) => console.error('[crawl]', e));
+  }).on('error', (err) => {
+    // e.g. EADDRINUSE: another iPromotion server is already running on this port.
+    console.error(`Could not start on port ${config.port}: ${err.message}`);
+    process.exit(1);
+  });
+}

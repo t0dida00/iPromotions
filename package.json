@@ -12,10 +12,12 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@sparticuz/chromium": "^153.0.0",
     "cheerio": "^1.2.0",
     "express": "^5.3.0",
     "node-cron": "^4.6.0",
     "pg": "^8.23.1",
-    "playwright": "^1.64.1"
+    "playwright": "^1.64.1",
+    "playwright-core": "^1.64.1"
   }
 }
