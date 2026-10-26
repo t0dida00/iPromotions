@@ -2,6 +2,7 @@ import { showDashboard, hideDashboard } from './dashboard.js';
 import { initAuth, idToken } from './auth.js';
 import { mountWolt, showWolt } from './wolt.js';
 import { mountFollow, showFollow } from './expiry.js';
+import { mountPricing, showPricing } from './pricing.js';
 import { friendlyError } from './friendly.js';
 
 // META comes from /api/meta (small): stores from config.js, their status, per-section update
@@ -495,6 +496,7 @@ const foodSection = document.querySelector('section[data-wolt]');
 if (foodSection) mountWolt(foodSection);
 // Follow your discount: product photos → expiry dates on a calendar (public/expiry.js).
 mountFollow(document.querySelector('section[data-view="follow"]'));
+mountPricing(document.querySelector('section[data-view="pricing"]'));
 
 // Refresh buttons: a promotions section refreshes only its own stores; the dashboard's refreshes
 // everything. Also used by the dashboard's per-store and per-section buttons. The server ignores
@@ -548,6 +550,7 @@ function showView() {
   else hideDashboard();
   if (currentView === foodSection?.dataset.view) showWolt();
   if (currentView === 'follow') showFollow();
+  if (currentView === 'pricing') showPricing();
   if (META) viewFor(currentView)?.ensureLoaded();
 }
 // Switch sections without reloading the page.

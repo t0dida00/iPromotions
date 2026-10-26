@@ -2,7 +2,7 @@
 // user photographs products, presses "Check", and the server's vision model reads each label's
 // use-by or best-before date (POST /api/expiry/scan, src/expiry.js). The dates found are listed in a
 // review dialog where the user fixes the product name, date and kind, adds a location, and saves
-// (or cancels). Saved dates go to the user's account and are shown on a month calendar and an
+// (or cancels); "Enter manually" opens the same dialog with an empty row and no photo. Saved dates go to the user's account and are shown on a month calendar and an
 // upcoming list, each downloadable as an .ics event. Signed-in users only; photos are shrunk here
 // and never stored.
 import { idToken, openDialog } from './auth.js';
@@ -12,6 +12,7 @@ const MAX_SIDE = 768; // px: keeps a photo around 500 image tokens
 const PARALLEL = 3;
 const CLIENT_TIMEOUT_MS = 11_000; // the server gives the model 8 s; this only catches a stuck request
 
+const PEN = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4"/></svg>';
 const KIND = { use_by: 'Use by', best_before: 'Best before' };
 const REASONS = {
   not_label: "This doesn't look like a product label.",
@@ -24,11 +25,13 @@ const REASONS = {
 
 let root = null;
 let user = null;
-// status: preparing → ready → checking → found (read, not saved yet) → done (saved), or failed
+// status: preparing → ready → checking → found (read, not saved yet) → done (saved), or failed.
+// Dates typed in with "Enter manually" are rows too, with no photo (thumb null), and skip the tray.
 let photos = []; // { id, thumb, data, status, result, error }
 let entries = null; // saved dates from the server; null until loaded
 let month = firstOfMonth(new Date());
 let loadError = '';
+let credits; // { balance, unlimitedUntil, nextFreeAt, owner }; null = not metered; undefined = not loaded
 let dialog = null; // the review dialog (<dialog>), created on mount
 const LAST_LOCATION = 'ipromotion.expiryLocation'; // suggested for new rows, in this browser only
 const lastLocation = () => { try { return localStorage.getItem(LAST_LOCATION) ?? ''; } catch { return ''; } };
@@ -56,11 +59,12 @@ async function api(path, { method = 'GET', body, timeout } = {}) {
     signal: timeout ? AbortSignal.timeout(timeout) : undefined,
   });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
-  if (!res.ok) throw Object.assign(new Error(data?.error ?? `Request failed (${res.status})`), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error(data?.error ?? `Request failed (${res.status})`), { status: res.status, data });
   return data;
 }
 
 async function loadEntries() {
+  api('/api/credits').then((r) => ((credits = r.credits), render())).catch(() => {});
   try {
     entries = (await api('/api/expiry')).entries;
     loadError = '';
@@ -97,7 +101,7 @@ function addFiles(files) {
 function removePhoto(id) {
   const p = photos.find((x) => x.id === id);
   if (!p || p.status === 'checking') return;
-  URL.revokeObjectURL(p.thumb);
+  if (p.thumb) URL.revokeObjectURL(p.thumb);
   photos = photos.filter((x) => x !== p);
   render();
 }
@@ -108,12 +112,15 @@ async function check(p) {
   render();
   try {
     const r = await api('/api/expiry/scan', { method: 'POST', body: { image: p.data }, timeout: CLIENT_TIMEOUT_MS });
+    if (r.credits) credits = r.credits;
     p.result = r;
     if (r.found) Object.assign(p, { status: 'found', draft: { kind: r.kind, date: r.date, product: r.product ?? '', location: lastLocation() } });
     else Object.assign(p, { status: 'failed', error: REASONS[r.reason] ?? REASONS.no_date });
   } catch (e) {
     const timedOut = e.name === 'TimeoutError' || e.name === 'AbortError';
-    Object.assign(p, { status: 'failed', error: timedOut ? REASONS.timeout : e.message });
+    // 402 = out of checks: this photo waits (the date can still be typed in, which is free).
+    Object.assign(p, { status: 'failed', error: timedOut ? REASONS.timeout : e.message, outOfChecks: e.status === 402 });
+    if (e.data?.credits) credits = e.data.credits;
     if (e.status === 401) openDialog();
   }
   render();
@@ -135,6 +142,13 @@ function addByHand(p, date) {
   openReview();
 }
 
+// "Enter manually": a new date with no photo, straight to the review dialog.
+function addManual() {
+  photos.push({ id: crypto.randomUUID(), thumb: null, data: null, status: 'found', result: null, error: '', draft: { kind: 'use_by', date: today(), product: '', location: lastLocation() } });
+  render();
+  openReview();
+}
+
 // ── Review dialog: the dates found, editable, then Save or Cancel ─────────────────────────────
 const pending = () => photos.filter((p) => p.status === 'found');
 
@@ -142,7 +156,7 @@ function openReview() {
   const list = pending();
   if (!list.length || !dialog) return;
   dialog.innerHTML = `<form class="review" method="dialog">
-    <h2 id="review-title">${list.length === 1 ? 'Date found' : `${list.length} dates found`}</h2>
+    <h2 id="review-title">${list.length > 1 ? `${list.length} dates to save` : list[0].thumb ? 'Date found' : 'New date'}</h2>
     <p class="hint">Check each date, name the product and add where you saw it. Nothing is saved until you press Save.</p>
     <ul class="review-list">${list.map(reviewRow).join('')}</ul>
     <p class="review-error" role="alert" hidden></p>
@@ -157,7 +171,7 @@ function openReview() {
 function reviewRow(p) {
   const d = p.draft;
   return `<li class="review-row" data-id="${p.id}">
-    <img class="review-thumb" src="${esc(p.thumb)}" alt="" />
+    ${p.thumb ? `<img class="review-thumb" src="${esc(p.thumb)}" alt="" />` : `<span class="review-thumb manual" aria-hidden="true">${PEN}</span>`}
     <div class="review-fields">
       <label class="review-field review-product"><span>Product name</span>
         <input name="product" value="${esc(d.product)}" placeholder="e.g. Chicken fillet" maxlength="60" required /></label>
@@ -201,6 +215,7 @@ async function saveReview() {
   }
   const location = list.map((p) => p.draft.location).find(Boolean);
   if (location) try { localStorage.setItem(LAST_LOCATION, location); } catch {}
+  photos = photos.filter((p) => p.thumb || p.status !== 'done'); // typed-in dates have no tray item
   render();
   if (!failed.length) return dialog.close();
   openReview(); // only the rows that didn't save are left
@@ -306,24 +321,43 @@ function render() {
 }
 
 function photoCard() {
+  const tray = photos.filter((p) => p.thumb);
   const ready = photos.filter((p) => p.status === 'ready').length;
   const toReview = pending().length;
   const busy = photos.some((p) => p.status === 'checking' || p.status === 'preparing');
   return `<div class="follow-card">
     <div class="follow-head">
-      <div><h2>Add products</h2><p class="hint">Photograph the label so the date is sharp and readable. Packing dates are ignored.</p></div>
+      <div><h2>Add products</h2><p class="hint">Photograph the label so the date is sharp and readable, or enter the date yourself. Packing dates are ignored.</p></div>
       <div class="follow-pick">
+        <button class="btn" data-act="manual-add">Enter manually</button>
         <label class="btn"><input type="file" accept="image/*" capture="environment" data-act="files" hidden />Take photo</label>
         <label class="btn"><input type="file" accept="image/*" multiple data-act="files" hidden />Choose photos</label>
       </div>
     </div>
-    ${photos.length ? `<ul class="tray">${photos.map(photoItem).join('')}</ul>` : '<p class="tray-empty">No photos yet.</p>'}
+    ${tray.length ? `<ul class="tray">${tray.map(photoItem).join('')}</ul>` : '<p class="tray-empty">No photos yet.</p>'}
+    ${creditsLine()}
     <div class="follow-actions">
-      ${photos.length && !busy ? '<button class="btn" data-act="clear">Clear photos</button>' : ''}
+      ${tray.length && !busy ? '<button class="btn" data-act="clear">Clear photos</button>' : ''}
       ${toReview && !busy ? `<button class="btn" data-act="review">Review &amp; save (${toReview})</button>` : ''}
-      <button class="btn btn-primary" data-act="check" ${ready && !busy ? '' : 'disabled'}>${busy && !ready ? 'Checking…' : 'Check'}${ready ? ` (${ready})` : ''}</button>
+      ${outOfChecks() && !busy
+        ? '<a class="btn btn-primary" href="/pricing" data-view-link>Get more checks</a>'
+        : `<button class="btn btn-primary" data-act="check" ${ready && !busy ? '' : 'disabled'}>${busy && !ready ? 'Checking…' : 'Check'}${ready ? ` (${ready})` : ''}</button>`}
     </div>
   </div>`;
+}
+
+// Checks left, from the server (null when checks aren't metered, e.g. locally without a database).
+const outOfChecks = () => Boolean(credits && !credits.owner && !credits.unlimitedUntil && credits.balance < 1);
+function creditsLine() {
+  if (!credits) return '';
+  const when = (iso) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const text = credits.owner
+    ? 'Checks are free for the owner'
+    : credits.unlimitedUntil
+      ? `<b>Unlimited</b> until ${esc(when(credits.unlimitedUntil))}`
+      : `<b>${credits.balance}</b> check${credits.balance === 1 ? '' : 's'} left · +1 free on ${esc(when(credits.nextFreeAt))}`;
+  return `<p class="credits-line"><span>${text}. A check is used only when a date is found; typing a date is free.</span>
+    <a href="/pricing" data-view-link>${outOfChecks() ? 'Get more checks' : 'Pricing'}</a></p>`;
 }
 
 function photoItem(p) {
@@ -342,7 +376,7 @@ function photoItem(p) {
     ${(p.draft?.product || r?.product) ? `<b class="tray-name">${esc(p.draft?.product || r.product)}</b>` : ''}
     ${status}
     ${p.status === 'failed' && p.data ? `<div class="tray-fix">
-      <button class="btn btn-sm" data-act="retry" data-id="${p.id}">Retry</button>
+      ${p.outOfChecks ? '<a class="btn btn-sm btn-primary" href="/pricing" data-view-link>Get checks</a>' : `<button class="btn btn-sm" data-act="retry" data-id="${p.id}">Retry</button>`}
       <input type="date" data-act="manual" data-id="${p.id}" aria-label="Enter the date by hand" title="Enter the date by hand" />
     </div>` : ''}
   </li>`;
@@ -409,7 +443,7 @@ function upcomingCard() {
           <button class="btn btn-sm btn-icon" data-act="delete" data-id="${e.id}" aria-label="Delete">×</button>
         </span>
       </li>`;
-    }).join('')}</ul>` : '<p class="tray-empty">No dates yet. Add photos above and press <b>Check</b>.</p>'}
+    }).join('')}</ul>` : '<p class="tray-empty">No dates yet. Add photos above and press <b>Check</b>, or <b>Enter manually</b>.</p>'}
   </div>`;
 }
 
@@ -423,9 +457,10 @@ export function mountFollow(section) {
     const { act, id } = el.dataset;
     if (act === 'login') openDialog();
     else if (act === 'remove') removePhoto(id);
+    else if (act === 'manual-add') addManual();
     else if (act === 'clear') {
-      photos.forEach((p) => URL.revokeObjectURL(p.thumb));
-      photos = [];
+      photos.forEach((p) => p.thumb && URL.revokeObjectURL(p.thumb));
+      photos = photos.filter((p) => !p.thumb); // keeps typed-in dates waiting for review
       render();
     } else if (act === 'check') checkAll();
     else if (act === 'review') openReview();

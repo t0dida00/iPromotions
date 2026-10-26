@@ -12,6 +12,8 @@ import { initDb, ensureDb, dbEnabled, hit, query } from './db.js';
 import { dispatchCrawl } from './github.js';
 import { scanEnabled, scanLabel, listEntries, entryFrom, addEntry, changeEntry, removeEntry } from './expiry.js';
 import { woltOffers, cachedOffers } from './wolt.js';
+import { getCredits, reserve, settle } from './credits.js';
+import { billingRouter, stripeWebhook, paymentsEnabled } from './billing.js';
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const startedAt = new Date().toISOString();
@@ -34,6 +36,7 @@ app.use((_req, _res, next) => (dbEnabled() ? ensureDb().catch((e) => console.err
 const limits = config.rateLimits ?? {};
 const crawlLimit = rateLimit({ name: 'crawl', shared: true, ...limits.crawl, message: 'Too many refresh requests from this address. Please wait a few minutes.' });
 const scanLimit = rateLimit({ name: 'scan', shared: true, ...limits.scan, message: 'Too many photo checks from this address. Please wait a few minutes.' });
+const checkoutLimit = rateLimit({ name: 'checkout', shared: true, ...limits.checkout, message: 'Too many payment attempts from this address. Please wait a few minutes.' });
 const woltLimit = rateLimit({ name: 'wolt', shared: true, ...limits.wolt, message: 'Too many Wolt lookups for new locations from this address. Please wait a few minutes.' });
 // For uptime checks: is the database reachable, and when did the last crawl finish? Before the
 // rate limits, so a monitor polling it never gets 429.
@@ -44,6 +47,8 @@ app.get('/api/health', async (_req, res) => {
   const lastCrawl = db === false ? null : (await readStatus()).updatedAt;
   res.status(db === false ? 503 : 200).json({ ok: db !== false, db, lastCrawl });
 });
+// Stripe → us (src/billing.js): raw body for the signature check, and no rate limit (Stripe retries).
+app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }), stripeWebhook);
 app.use('/api', rateLimit({ name: 'api', ...limits.api }));
 app.use(rateLimit({ name: 'pages', ...limits.pages }));
 
@@ -54,6 +59,8 @@ app.use(express.static(PUBLIC, { setHeaders: revalidate }));
 // Firebase settings for Google sign-in in the browser: GET /api/auth-config.
 app.use(authRouter);
 app.use(favoritesRouter);
+app.use('/api/billing/checkout', checkoutLimit);
+app.use(billingRouter);
 
 const storeList = () =>
   Object.entries(config.sources)
@@ -224,18 +231,53 @@ async function countScan(uid) {
   return count;
 }
 
+// Each check that finds a date costs 1 (src/credits.js): one is reserved before the model runs and
+// given back if no date was found. With no checks left the answer is 402 with a link to /pricing.
+// Without a database (local) checks aren't metered; the daily cap still applies.
 app.post('/api/expiry/scan', requireUser, scanLimit, json, async (req, res) => {
   const image = req.body?.image;
   if (typeof image !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/.test(image))
     return res.status(400).json({ error: 'Send the photo as a JPEG, PNG or WebP data URL.' });
   if (!scanEnabled()) return res.status(503).json({ error: 'Photo checks are not configured on this server yet.' });
+  if (dbEnabled() && req.user.id == null) return res.status(503).json({ error: "We couldn't reach your account right now. Please try again in a moment." });
+  let reservation = null;
   try {
-    if ((await countScan(req.user.uid)) > config.expiryScansPerDay)
-      return res.status(429).json({ error: `You have used today's ${config.expiryScansPerDay} photo checks. Try again tomorrow.` });
-    res.json(await scanLabel(image));
+    if (dbEnabled()) {
+      reservation = await reserve(req.user);
+      if (!reservation.ok)
+        return res.status(402).json({ error: "You're out of checks. Get more on the pricing page, or wait for your free weekly check.", credits: reservation.credits, pricing: '/pricing' });
+    }
+    const cap = reservation?.unlimited ? config.credits.unlimitedPerDay : config.expiryScansPerDay;
+    if ((await countScan(req.user.uid)) > cap) {
+      if (reservation) await settle(req.user, reservation, false);
+      return res.status(429).json({ error: `You have used today's ${cap} photo checks. Try again tomorrow.` });
+    }
+    const result = await scanLabel(image);
+    const credits = reservation ? await settle(req.user, reservation, result.found) : null;
+    res.json({ ...result, credits });
   } catch (e) {
     console.error('[expiry]', e.message);
+    if (reservation) await settle(req.user, reservation, false).catch((err) => console.error('[credits] refund failed:', err.message));
     res.status(502).json({ error: "We couldn't check this photo right now. Please try again in a moment." });
+  }
+});
+
+// The plans on sale and whether payments are switched on (/pricing; public).
+app.get('/api/plans', (_req, res) => {
+  const { plans, freeChecks, weeklyChecks, unlimitedPerDay } = config.credits;
+  res.json({ plans: Object.entries(plans).map(([key, p]) => ({ key, ...p })), freeChecks, weeklyChecks, unlimitedPerDay, payments: paymentsEnabled() });
+});
+
+// The signed-in user's checks: { credits: { balance, unlimitedUntil, nextFreeAt, owner } }, or
+// credits null when checks aren't metered (no database).
+app.get('/api/credits', requireUser, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!dbEnabled() || req.user.id == null) return res.json({ credits: null });
+  try {
+    res.json({ credits: await getCredits(req.user) });
+  } catch (e) {
+    console.error('[credits]', e.message);
+    res.status(503).json({ error: "Couldn't load your checks right now. Please try again in a moment." });
   }
 });
 
@@ -263,7 +305,7 @@ app.delete('/api/expiry/:id', requireUser, async (req, res) => {
 });
 
 // Sidebar sections are real URLs; they all load the same page, which shows the matching section.
-app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/food', '/follow', '/privacy', '/terms', '/contact'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
+app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/food', '/follow', '/privacy', '/terms', '/contact', '/pricing'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
 // Scheduled refreshes: sections in `sectionSchedules` (e.g. Food, daily) run on their own cron; the
 // main schedule (weekly) refreshes every other store. The first start still crawls everything, and

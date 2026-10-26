@@ -114,10 +114,15 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   (~500 tokens y 1–2 s por foto). El modelo devuelve la fecha y **las palabras impresas junto a
   ella**; el tipo (use-by / best-before / fecha de envasado, que se descarta) lo decide `KINDS` en
   código, porque el modelo los confunde. Las fechas encontradas no se guardan solas: un diálogo de revisión
-  (nombre, fecha, tipo, ubicación; Save / Cancel) las guarda con `POST /api/expiry`. Las fechas se guardan por usuario en la tabla `expiry_entries`
+  (nombre, fecha, tipo, ubicación; Save / Cancel) las guarda con `POST /api/expiry`. "Enter manually" abre ese mismo diálogo con una fila vacía, sin foto. Las fechas se guardan por usuario en la tabla `expiry_entries`
   (sin `DATABASE_URL`, en `data/expiry.json`; CRUD en `/api/expiry`); las fotos no se guardan.
   Límites: `rateLimits.scan` por IP y `expiryScansPerDay` por usuario, contados en la tabla
-  `rate_counters` para que valgan entre instancias de Vercel.
+  `rate_counters` para que valgan entre instancias de Vercel. Cada foto con fecha encontrada gasta
+  1 "check" (`src/credits.js`: `reserve()` antes del modelo, `settle()` lo devuelve si no hay
+  fecha; 10 al empezar +1 por semana; el owner no paga). Sin checks → 402. Se compran en `/pricing`
+  (`public/pricing.js`) con Stripe Checkout (`src/billing.js`, planes en `config.credits.plans`);
+  el webhook `POST /api/billing/webhook` (cuerpo raw, antes del rate limit) verifica la firma y el
+  importe y concede una vez por sesión (tabla `purchases`).
 - Cron (ignora el cooldown): `config.schedule` (semanal) refresca las secciones sin horario propio;
   las de `config.sectionSchedules` tienen el suyo (Food: diario a las 09:00). El dashboard muestra el
   próximo de todos (`nextSchedule()` en `src/server.js`).

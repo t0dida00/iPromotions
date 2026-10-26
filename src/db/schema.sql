@@ -52,3 +52,34 @@ create table if not exists rate_counters (
   count    int not null,
   reset_at timestamptz not null
 );
+
+-- "Follow your discount" checks (src/credits.js). Each account starts with 10 and gets 1 more every
+-- week; packs add more; Unlimited is a 30-day pass. A check costs 1 only when a date is found.
+create table if not exists credits (
+  user_id         int primary key references users(id) on delete cascade,
+  balance         int not null default 10 check (balance >= 0),
+  unlimited_until timestamptz,
+  weekly_at       timestamptz not null default now(), -- last weekly grant (or sign-up)
+  created_at      timestamptz not null default now()
+);
+
+-- Every change to a balance, for support questions and refunds.
+create table if not exists credit_ledger (
+  id         bigserial primary key,
+  user_id    int not null references users(id) on delete cascade,
+  delta      int not null,                      -- +n checks, or days for unlimited (reason purchase)
+  reason     text not null,                     -- signup | weekly | purchase | scan | refund
+  ref        text,                              -- Stripe session id, plan…
+  created_at timestamptz not null default now()
+);
+create index if not exists credit_ledger_user on credit_ledger (user_id, created_at desc);
+
+-- Paid Stripe Checkout sessions. The primary key makes the webhook safe to repeat.
+create table if not exists purchases (
+  session_id   text primary key,
+  user_id      int not null references users(id) on delete cascade,
+  plan         text not null,
+  amount_cents int not null,
+  currency     text not null,
+  created_at   timestamptz not null default now()
+);

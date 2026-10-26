@@ -167,6 +167,20 @@
         <div class="wrap follow" id="follow"></div>
       </section>
 
+      <!-- Pricing for Follow your discount's photo checks (public/pricing.js, src/billing.js). -->
+      <section class="view" data-view="pricing" hidden>
+        <header class="page-head wrap">
+          <button class="menu-btn" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="page-title">
+            <h1>Pricing</h1>
+            <p class="sub">Photo checks for Follow your discount</p>
+          </div>
+        </header>
+        <div class="wrap pricing" id="pricing"></div>
+      </section>
+
       <!-- Legal and contact pages: linked from the footer, not the sidebar. -->
       <section class="view" data-view="privacy" hidden>
         <header class="page-head wrap">
@@ -208,6 +222,9 @@
               and the location you type. Photos are shrunk in your browser and sent once to an AI model on
               Hugging Face to read the date; <b>we do not store photos</b>. We count your photo checks per
               day to keep the service free.</li>
+            <li><b>Checks and payments:</b> how many photo checks you have, and a record of each change (free,
+              used, bought). When you buy checks, we keep what you bought, the amount and the time, and Stripe's
+              payment reference. <b>Card details are handled by Stripe and never reach us.</b></li>
           </ul>
 
           <h2>Why we use it (legal basis)</h2>
@@ -221,13 +238,16 @@
             <li><b>Neon</b>: the database, in Frankfurt, Germany.</li>
             <li><b>Google Firebase</b>: sign-in.</li>
             <li><b>Hugging Face</b> and its inference providers: reading dates from photos.</li>
+            <li><b>Stripe</b>: payments. Stripe is also a controller for payment data it must keep by law
+              (see <a href="https://stripe.com/privacy" target="_blank" rel="noopener">stripe.com/privacy</a>).</li>
           </ul>
           <p>Some of these companies are based in the United States; transfers rely on their standard
             contractual clauses or the EU–US Data Privacy Framework.</p>
 
           <h2>How long we keep it</h2>
           <p>Account data, favorites and saved dates are kept until you delete them or ask us to delete
-            your account. Each account keeps at most 300 dates; the oldest is removed first.</p>
+            your account. Payment records are kept as long as accounting law requires (in Finland,
+            generally 6 years), even if the account is deleted. Each account keeps at most 300 dates; the oldest is removed first.</p>
 
           <h2>Your rights</h2>
           <p>You can ask to see, correct, export or delete your data, or object to its use. Send your
@@ -271,6 +291,17 @@
           <h2>Follow your discount</h2>
           <p>Dates are read from your photos by an AI model and can be wrong. Always check the date printed on
             the package. Do not rely on iPromotion for food safety decisions.</p>
+
+          <h2>Photo checks and payments</h2>
+          <p>Reading dates from photos uses checks. Every account gets free checks (10 to start and 1 more each
+            week). A check is used only when a date is found. More checks can be bought on the
+            <a href="/pricing" data-view-link>pricing page</a>: packs of checks that never expire, or Unlimited
+            for 30 days (fair use applies). Payments are one-time, through Stripe; there is no subscription and
+            nothing renews automatically. Prices are in euros and include VAT.</p>
+          <p>Checks are added to your account right after payment. By asking for that at checkout you agree that
+            the 14-day right of withdrawal for digital content ends when they are added. If a payment or a check
+            goes wrong because of a problem on our side, <a href="/contact" data-view-link>contact us</a> and we
+            will fix it or refund you. Checks can't be exchanged for money or moved to another account.</p>
 
           <h2>Fair use</h2>
           <p>Please don't overload the site, get around its limits, scrape it in bulk, or use it for anything
@@ -319,6 +350,7 @@
       <footer class="site-footer">
         <div class="wrap footer-inner">
           <nav class="footer-links" aria-label="Footer">
+            <a href="/pricing" data-view-link>Pricing</a>
             <a href="/privacy" data-view-link>Privacy</a>
             <a href="/terms" data-view-link>Terms</a>
             <a href="/contact" data-view-link>Contact</a>

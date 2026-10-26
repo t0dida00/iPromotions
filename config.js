@@ -28,10 +28,25 @@ export default {
     pages: { windowMs: 60_000, max: 600 }, // pages, scripts, logos
     wolt: { windowMs: 10 * 60_000, max: 6 }, // Wolt lookups for a new location (each opens Chromium)
     scan: { windowMs: 10 * 60_000, max: 30 }, // expiry-date photo checks (each calls the vision model)
+    checkout: { windowMs: 10 * 60_000, max: 10 }, // opening a Stripe payment page
   },
 
   // "Follow your discount": photo checks per signed-in user per day (bounds the AI cost).
   expiryScansPerDay: Number(process.env.EXPIRY_SCANS_PER_DAY) || 60,
+
+  // Checks for "Follow your discount" (src/credits.js, /pricing). A check costs 1 only when a date
+  // is found. New accounts get `freeChecks`, then `weeklyChecks` every week. Prices in euro cents,
+  // VAT included; paid through Stripe Checkout (src/billing.js).
+  credits: {
+    freeChecks: 10,
+    weeklyChecks: 1,
+    unlimitedPerDay: 100, // fair use while Unlimited is active
+    plans: {
+      pack10: { name: '10 checks', checks: 10, cents: 899 },
+      pack25: { name: '25 checks', checks: 25, cents: 1499 },
+      unlimited30: { name: 'Unlimited for 30 days', days: 30, cents: 2499 },
+    },
+  },
 
   // Wolt offers in Food Promotions are looked up live for the visitor's location (src/wolt.js),
   // not crawled. Results are cached per ~1 km area; `defaultLocation` is used when the browser

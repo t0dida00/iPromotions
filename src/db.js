@@ -36,6 +36,23 @@ export async function initDb() {
 
 export const query = (text, params) => pool.query(text, params);
 
+// Runs fn(client) in one transaction: committed if it resolves, rolled back if it throws.
+export async function withTransaction(fn) {
+  await ensureDb();
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const result = await fn(client);
+    await client.query('commit');
+    return result;
+  } catch (e) {
+    await client.query('rollback').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 // Counts one request against `key` in a fixed window shared by every server instance; returns the
 // count so far and when the window ends. Expired windows restart at 1.
 export async function hit(key, windowMs) {

@@ -61,7 +61,7 @@
       "destination": "/api/index"
     },
     {
-      "source": "/(dashboard|favorites|promotions|clothing|electronics|food|follow|privacy|terms|contact)",
+      "source": "/(dashboard|favorites|promotions|clothing|electronics|food|follow|privacy|terms|contact|pricing)",
       "destination": "/index.html"
     }
   ]

@@ -18,6 +18,7 @@ Node.js (ESM) · Express 5 · Playwright · cheerio · PostgreSQL. No build step
 | **/food** | Hesburger and Burger King campaigns (read by the campaign analyst), live Wolt offers near you, links to McDonald's and Subway |
 | **/favorites** | Deals from every starred (☆) category across sections |
 | **/follow** | *Follow your discount* (signed in): photograph labels and the use-by / best-before dates go on a calendar |
+| **/pricing** | Photo checks for *Follow your discount*: free checks, packs and Unlimited, paid with Stripe |
 | **/dashboard** | Status of each store's crawler, deal counts, refresh history and the next scheduled run |
 
 Each section has search, store and category filters and sorting. Deals load only when a section is
@@ -50,6 +51,7 @@ environment variables (`.env` locally, which is git-ignored; see `.env.example`)
 | `NUXT_HF_TOKEN`, `NUXT_HF_MODEL` | Hugging Face: campaign analyst for the Food section |
 | `NUXT_HF_VISION_MODEL` | Hugging Face vision model for *Follow your discount* (has a default) |
 | `GITHUB_TOKEN`, `GITHUB_REPO` | Online only: the Refresh button starts the GitHub Actions crawl |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PUBLIC_URL` | Payments for photo checks (`/pricing`); without them Buy is disabled |
 | `PORT`, `CRON_SCHEDULE`, `FOOD_CRON_SCHEDULE`, `CRAWL_CONCURRENCY`, `REFRESH_COOLDOWN_MINUTES` | Optional overrides |
 
 ## Accounts and security
@@ -66,6 +68,12 @@ environment variables (`.env` locally, which is git-ignored; see `.env.example`)
   browser and are merged into the account at sign-in.
 - **Expiry dates** belong to the signed-in user (`expiry_entries` table). Photos are shrunk in
   the browser, sent once to the vision model and never stored.
+- **Photo checks** (`src/credits.js`): every account gets 10, then +1 a week. A check is used
+  only when a date is found (one is reserved before the AI runs, so parallel checks can't overdraw,
+  and given back otherwise). Packs (10 for €8.99, 25 for €14.99) and Unlimited (30 days, €24.99,
+  fair use 100 a day) are one-time Stripe Checkout payments. The webhook verifies Stripe's
+  signature, checks the amount against the plan, and grants each session once. Card details never
+  reach the server. Plans are in `config.credits`.
 - **Rate limits** per IP (`rateLimits` in `config.js`) return `429` with `Retry-After`. The limits
   on costly work (refreshes, new Wolt areas, photo checks, the daily photo cap per user) are
   counted in the database, so they hold across server instances. A store refreshed in the last
@@ -87,6 +95,9 @@ The schema is in `src/db/schema.sql` and is applied on start (idempotent).
 | `favorites` | `(user_id, segment, category)`; deleted together with the user |
 | `expiry_entries` | One per saved date: `firebase_uid`, `kind` (`use_by` / `best_before`), date, product, location |
 | `rate_counters` | Shared request counters: `key`, `count`, `reset_at` |
+| `credits` | Per account: photo checks left, `unlimited_until`, last weekly grant |
+| `credit_ledger` | Every change to checks: signup, weekly, scan, purchase, refund |
+| `purchases` | Paid Stripe Checkout sessions (one row each; makes the webhook safe to repeat) |
 | `kv` | Online only: one JSON document per former `data/` file (`deals-<section>.json`, `status.json`, caches, crawl progress) |
 
 ## Deploy online (free tiers: Vercel + Neon + GitHub Actions)
