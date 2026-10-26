@@ -210,6 +210,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const only = segs?.length ? crawlableStores().filter((k) => segs.includes(segmentOf(k))) : null;
   if (segs?.length && !only.length) throw new Error(`No stores in section(s): ${segs.join(', ')}`);
   const status = await crawlAll(console.log, arg('trigger') ?? 'cli', only);
-  console.log(`Saved ${status.runs[0].deals} deals ${useDb() ? 'to the database' : `to ${DATA_DIR}`}`);
-  if (useDb()) process.exit(0); // close the database pool
+  const { deals, failed } = status.runs[0];
+  const where = useDb() ? 'to the database' : `to ${DATA_DIR}`;
+  console.log(`Saved ${deals} deals ${where}`);
+  // A failed store keeps its previous deals, but exits non-zero so the GitHub Actions run shows red
+  // (and GitHub emails about scheduled runs that fail). Exiting also closes the database pool.
+  if (failed.length) console.error(`Failed: ${failed.join(', ')}`);
+  process.exit(failed.length ? 1 : 0);
 }

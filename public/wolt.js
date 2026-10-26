@@ -2,6 +2,8 @@
 // location, from GET /api/wolt (looked up live by the server, cached per ~1 km area). Only offers
 // open to everyone are listed, not Wolt+ member deals.
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+// Links and images come from scraped sites: only http(s) URLs (or our own /paths), never javascript:.
+const safeUrl = (u) => (/^(https?:\/\/|\/)/i.test(String(u ?? '')) ? esc(u) : '');
 const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 const PAGE = 24;
 
@@ -59,8 +61,8 @@ function card(v) {
   const meta = [v.rating ? `★ ${v.rating.toFixed(1)}` : '', v.estimate ? `${esc(v.estimate)} min` : '', v.priceRange ? '€'.repeat(v.priceRange) : '']
     .filter(Boolean)
     .join(' · ');
-  return `<a class="card wolt-card" href="${esc(v.url)}" target="_blank" rel="noopener">
-    <div class="img wolt-img">${v.image ? `<img src="${esc(v.image)}" alt="" loading="lazy" />` : ''}</div>
+  return `<a class="card wolt-card" href="${safeUrl(v.url)}" target="_blank" rel="noopener">
+    <div class="img wolt-img">${v.image ? `<img src="${safeUrl(v.image)}" alt="" loading="lazy" />` : ''}</div>
     <span class="src" style="background:#009de0">Wolt</span>
     <div class="body">
       <span class="name">${esc(v.name)}</span>

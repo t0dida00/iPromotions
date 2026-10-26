@@ -49,7 +49,8 @@ navegadores automatizados), `segment` la sección (`groceries` por defecto, `clo
 
 **Cuentas (`src/db.js`, PostgreSQL con `pg`):** tablas `users` (rol `owner`/`user`, un solo owner
 por índice único parcial; el owner es el email verificado de `OWNER_EMAIL`) y `favorites`
-(`user_id, segment, category`). Esquema en `src/db/schema.sql`, aplicado al arrancar (idempotente).
+(`user_id, segment, category`), además de `expiry_entries` y `rate_counters`. Esquema en
+`src/db/schema.sql`, aplicado al arrancar (idempotente).
 Necesita `DATABASE_URL` (local: `docker compose up -d`, puerto 5434); sin ella el sitio funciona sin
 cuentas y el owner se deduce del token.
 
@@ -57,8 +58,10 @@ cuentas y el owner se deduce del token.
 `src/server.js`; con `VERCEL` no hay `listen`, ni cron real, ni crawl al arrancar), Neon (Postgres) y
 GitHub Actions (`.github/workflows/crawl.yml`, `npm run crawl -- --segment … --trigger …`). El botón
 Refresh del owner en Vercel lanza el workflow (`src/github.js`, `GITHUB_TOKEN`/`GITHUB_REPO`). En
-Vercel Chromium viene de `@sparticuz/chromium` (`src/browser.js`, usa `playwright-core`).
-`scripts/import-data.js` copia `data/*.json` a la tabla `kv`.
+Vercel Chromium viene de `@sparticuz/chromium` (`src/browser.js`, usa `playwright-core`). Región
+`fra1` (`vercel.json`, junto a Neon en Frankfurt). `npm run crawl` sale con código 1 si falla
+alguna tienda, para que el job de Actions quede en rojo.
+`scripts/import-data.js` copia `data/*.json` a la tabla `kv` (y `expiry.json` a `expiry_entries`).
 
 **Almacenamiento (`src/store.js`):** con `DATA_STORE=postgres` (Vercel y GitHub Actions) cada
 "fichero" es una fila de la tabla `kv` (clave = nombre del fichero) vía las mismas
@@ -95,7 +98,9 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   buscadas en vivo con Playwright (`src/wolt.js`, botón "Share location" de wolt.com), no por el cron.
   Caché por zona de ~1 km (`config.wolt`); solo las búsquedas sin caché cuentan para `rateLimits.wolt`.
   Frontend en `public/wolt.js`, montado en la sección con `data-wolt`.
-- Rate limit por IP en memoria (`src/rateLimit.js`, valores en `config.rateLimits`).
+- Rate limit por IP (`src/rateLimit.js`, valores en `config.rateLimits`): en memoria, salvo los
+  `shared: true` (crawl, wolt, scan), que cuentan en `rate_counters` vía `hit()` de `src/db.js`.
+- `GET /api/health` (sin rate limit): `{ ok, db, lastCrawl }`, 503 si la base de datos no responde.
 - Login con Google mediante Firebase Authentication, todo en el navegador (`public/auth.js`, SDK
   cargado desde gstatic con versión fija). El servidor solo expone la configuración web pública de
   Firebase en `GET /api/auth-config` (`src/auth.js`, variables `FIREBASE_*` de `.env`); sin ellas el
@@ -108,9 +113,10 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   por defecto `Qwen/Qwen3-VL-30B-A3B-Instruct:fastest`) con `max_tokens: 100` y corte a los 8 s
   (~500 tokens y 1–2 s por foto). El modelo devuelve la fecha y **las palabras impresas junto a
   ella**; el tipo (use-by / best-before / fecha de envasado, que se descarta) lo decide `KINDS` en
-  código, porque el modelo los confunde. Las fechas se guardan por usuario en `data/expiry.json`
-  (CRUD en `/api/expiry`); las fotos no se guardan. Límites: `rateLimits.scan` por IP y
-  `expiryScansPerDay` por usuario (en memoria).
+  código, porque el modelo los confunde. Las fechas se guardan por usuario en la tabla `expiry_entries`
+  (sin `DATABASE_URL`, en `data/expiry.json`; CRUD en `/api/expiry`); las fotos no se guardan.
+  Límites: `rateLimits.scan` por IP y `expiryScansPerDay` por usuario, contados en la tabla
+  `rate_counters` para que valgan entre instancias de Vercel.
 - Cron (ignora el cooldown): `config.schedule` (semanal) refresca las secciones sin horario propio;
   las de `config.sectionSchedules` tienen el suyo (Food: diario a las 09:00). El dashboard muestra el
   próximo de todos (`nextSchedule()` en `src/server.js`).

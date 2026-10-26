@@ -64,8 +64,10 @@ export async function verifyIdToken(token) {
 // a user. With a database the role is stored on the user row (src/db.js applies the same rule);
 // without one (or while it's unreachable) it is worked out from the token, so the owner can still
 // refresh.
-const ownerEmail = () => (process.env.OWNER_EMAIL || 'ddkhoa97@gmail.com').trim().toLowerCase();
-const roleFromClaims = (claims) => (claims?.email_verified && String(claims.email ?? '').toLowerCase() === ownerEmail() ? 'owner' : 'user');
+// Without OWNER_EMAIL nobody is owner (no default address, so none is published in the code).
+const ownerEmail = () => (process.env.OWNER_EMAIL ?? '').trim().toLowerCase();
+const roleFromClaims = (claims) =>
+  claims?.email_verified && ownerEmail() && String(claims.email ?? '').toLowerCase() === ownerEmail() ? 'owner' : 'user';
 
 // The signed-in user: { uid, email, name, role, id } where id is the users-table row (null when
 // there is no database). Created in the table on first sight.

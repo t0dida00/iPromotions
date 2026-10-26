@@ -15,6 +15,8 @@ const views = []; // one PromoView per promotions section
 const $ = (id) => document.getElementById(id);
 const eur = (n) => (n == null ? '' : '€' + n.toFixed(2));
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+// Links and images come from scraped sites: only http(s) URLs (or our own /paths), never javascript:.
+const safeUrl = (u) => (/^(https?:\/\/|\/)/i.test(String(u ?? '')) ? esc(u) : '');
 
 // Small wrapper so a blocked localStorage (private mode etc.) never breaks the page.
 const store = {
@@ -60,8 +62,8 @@ const dealText = (t) =>
 function card(d) {
   const s = STORES[d.source];
   const until = d.validUntil ? `Valid until ${new Date(d.validUntil).toLocaleDateString('en-GB')}` : '';
-  return `<a class="card" href="${esc(d.url)}" target="_blank" rel="noopener">
-    <div class="img">${d.image ? `<img src="${esc(d.image)}" alt="" loading="lazy" />` : ''}</div>
+  return `<a class="card" href="${safeUrl(d.url)}" target="_blank" rel="noopener">
+    <div class="img">${d.image ? `<img src="${safeUrl(d.image)}" alt="" loading="lazy" />` : ''}</div>
     ${d.discountPct ? `<span class="pct">−${d.discountPct}%</span>` : ''}
     <span class="src" style="background:${esc(s?.color ?? '#666')}">${esc(s?.name ?? d.store)}</span>
     <div class="body">
@@ -145,7 +147,7 @@ class PromoView {
     this.el('brochures').innerHTML = this.stores()
       .filter((s) => s.brochureUrl)
       .map(
-        (s) => `<a class="brochure" href="${esc(s.brochureUrl)}" target="_blank" rel="noopener" style="--c:${esc(s.color)}">
+        (s) => `<a class="brochure" href="${safeUrl(s.brochureUrl)}" target="_blank" rel="noopener" style="--c:${esc(s.color)}">
           ${s.logo ? `<img class="blogo" src="${esc(s.logo)}" alt="${esc(s.name)}" />` : `<span class="bname">${esc(s.name)}</span>`}
           <span class="bbranch">${esc(s.label)}</span>
           <span class="bopen">${esc(text)} ↗</span>
