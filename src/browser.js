@@ -13,7 +13,10 @@ async function launchOptions() {
 }
 
 export async function withBrowser(fn, contextOptions = {}) {
+  const started = Date.now();
   const browser = await chromium.launch(await launchOptions());
+  // Cold starts on Vercel unpack Chromium first; worth seeing when a lookup runs out of time.
+  if (process.env.VERCEL) console.log(`[browser] Chromium started in ${Date.now() - started} ms`);
   try {
     const context = await browser.newContext({
       locale: 'fi-FI',
