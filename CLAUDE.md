@@ -119,7 +119,7 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   Límites: `rateLimits.scan` por IP y `expiryScansPerDay` por usuario, contados en la tabla
   `rate_counters` para que valgan entre instancias de Vercel. Cada foto con fecha encontrada gasta
   1 "check" (`src/credits.js`: `reserve()` antes del modelo, `settle()` lo devuelve si no hay
-  fecha; 10 al empezar +1 por semana; el owner no paga). Sin checks → 402. Se compran en `/pricing`
+  fecha; 3 al empezar +1 por semana; el owner no paga). Sin checks → 402. Se compran en `/pricing`
   (`public/pricing.js`) con Stripe Checkout (`src/billing.js`, planes en `config.credits.plans`);
   el webhook `POST /api/billing/webhook` (cuerpo raw, antes del rate limit) verifica la firma y el
   importe y concede una vez por sesión (tabla `purchases`).

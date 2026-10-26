@@ -68,7 +68,7 @@ environment variables (`.env` locally, which is git-ignored; see `.env.example`)
   browser and are merged into the account at sign-in.
 - **Expiry dates** belong to the signed-in user (`expiry_entries` table). Photos are shrunk in
   the browser, sent once to the vision model and never stored.
-- **Photo checks** (`src/credits.js`): every account gets 10, then +1 a week. A check is used
+- **Photo checks** (`src/credits.js`): every account gets 3, then +1 a week. A check is used
   only when a date is found (one is reserved before the AI runs, so parallel checks can't overdraw,
   and given back otherwise). Packs (10 for €8.99, 25 for €14.99) and Unlimited (30 days, €24.99,
   fair use 100 a day) are one-time Stripe Checkout payments. The webhook verifies Stripe's

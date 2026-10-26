@@ -1,4 +1,4 @@
-// /pricing: photo checks for "Follow your discount". Free checks (10 to start, +1 a week), packs
+// /pricing: photo checks for "Follow your discount". Free checks (3 to start, +1 a week), packs
 // and a 30-day Unlimited pass, bought through Stripe Checkout (POST /api/billing/checkout →
 // Stripe's page → back to /pricing?paid=…, where we wait for the webhook to add the checks).
 import { idToken, openDialog } from './auth.js';

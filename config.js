@@ -38,7 +38,7 @@ export default {
   // is found. New accounts get `freeChecks`, then `weeklyChecks` every week. Prices in euro cents,
   // VAT included; paid through Stripe Checkout (src/billing.js).
   credits: {
-    freeChecks: 10,
+    freeChecks: 3,
     weeklyChecks: 1,
     unlimitedPerDay: 100, // fair use while Unlimited is active
     plans: {

@@ -53,15 +53,18 @@ create table if not exists rate_counters (
   reset_at timestamptz not null
 );
 
--- "Follow your discount" checks (src/credits.js). Each account starts with 10 and gets 1 more every
+-- "Follow your discount" checks (src/credits.js). Each account starts with 3 and gets 1 more every
 -- week; packs add more; Unlimited is a 30-day pass. A check costs 1 only when a date is found.
 create table if not exists credits (
   user_id         int primary key references users(id) on delete cascade,
-  balance         int not null default 10 check (balance >= 0),
+  balance         int not null default 3 check (balance >= 0),
   unlimited_until timestamptz,
   weekly_at       timestamptz not null default now(), -- last weekly grant (or sign-up)
   created_at      timestamptz not null default now()
 );
+
+-- The starting balance comes from config.credits.freeChecks (src/credits.js); keep the default in step.
+alter table credits alter column balance set default 3;
 
 -- Every change to a balance, for support questions and refunds.
 create table if not exists credit_ledger (
