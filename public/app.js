@@ -382,7 +382,10 @@ function showFavorites(map) {
     v.favorites = new Set(map(v));
     if (v.list) v.render();
   }
-  favoritesView.render();
+  // Account favorites arrive after startup, when Favorites may already be open: load the sections
+  // they need now, or the page waits on "Loading deals…" until the next meta poll.
+  if (currentView === 'favorites') favoritesView.ensureLoaded();
+  else favoritesView.render();
 }
 
 async function useAccountFavorites(uid) {
