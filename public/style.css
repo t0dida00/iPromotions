@@ -126,8 +126,8 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
 .brochures { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .brochure { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--c); border-radius: var(--radius); color: inherit; text-decoration: none; transition: transform 0.12s, box-shadow 0.12s; }
 .brochure:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgb(60 45 20 / 0.1); }
-.brochure .bname { font-weight: 700; font-size: 16px; }
-.brochure .blogo { height: 30px; width: auto; max-width: 160px; object-fit: contain; object-position: left center; margin-bottom: 4px; }
+.brochure .bname { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.brochure .blogo { height: 30px; width: auto; max-width: min(160px, 100%); object-fit: contain; object-position: left center; margin-bottom: 4px; }
 .brochure .bbranch { color: var(--muted); font-size: 13px; }
 .brochure .bopen { margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--c); }
 
@@ -208,9 +208,19 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
   .star { opacity: 1; }
   .cats-head { align-self: center; white-space: nowrap; padding: 0 4px; }
   .cats-sep { width: auto; height: 24px; margin: auto 4px; border-top: 0; border-left: 1px solid var(--line); }
-  .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .card .price { font-size: 17px; }
-  .brochures { grid-template-columns: 1fr 1fr; }
+  /* Brochures: one row of compact tiles that scrolls sideways, edge to edge, instead of tall cards
+     that filled the first screen. The whole tile is the link; ↗ in the corner replaces the text. */
+  .brochures { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 2px 16px 6px; scrollbar-width: none; }
+  .brochures::-webkit-scrollbar { display: none; }
+  .brochure { position: relative; flex: 0 0 148px; gap: 4px; padding: 10px 12px; border-left-width: 4px; scroll-snap-align: start; scroll-margin-left: 16px; }
+  .brochure::after { content: '↗'; position: absolute; top: 8px; right: 10px; font-size: 13px; font-weight: 700; color: var(--c); }
+  .brochure:hover { transform: none; }
+  .brochure .blogo { height: 20px; max-width: calc(100% - 16px); margin-bottom: 0; }
+  .brochure .bname { font-size: 14px; padding-right: 14px; }
+  .brochure .bbranch { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brochure .bopen { display: none; }
 }
 
 /* Dashboard */
