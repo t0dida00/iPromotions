@@ -203,6 +203,11 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
   .page-head .sub { display: none; }
   .layout { grid-template-columns: 1fr; gap: 12px; }
   .tools { flex-direction: column; } /* search above the sort select, both full width */
+  /* Only search + sort stick to the top; the title, notice and store buttons scroll away. The
+     boxes around them step aside (display: contents) so the bar sticks for the whole section. */
+  .filters, .filters > .wrap { display: contents; }
+  .filters > .wrap > * { margin-left: 16px; margin-right: 16px; }
+  .filters .tools { position: sticky; top: 0; z-index: 5; margin: 0; padding: 10px 16px; background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
   .cats { position: static; flex-direction: row; overflow-x: auto; max-height: none; padding-bottom: 4px; }
   .cat { flex: none; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
   .cat-row { flex: none; }
@@ -459,6 +464,8 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
   .review-row { grid-template-columns: 48px minmax(0, 1fr); gap: 10px; }
   .review-thumb { width: 48px; height: 48px; }
   .review-actions .btn { flex: 1; }
+  .day-actions .btn { flex: 0 0 auto; white-space: nowrap; }
+  .day-actions .btn:first-child { flex: 1 1 auto; }
 }
 
 /* Pricing (public/pricing.js). */

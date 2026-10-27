@@ -10,7 +10,7 @@ import { idToken, openDialog } from './auth.js';
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const MAX_SIDE = 768; // px: keeps a photo around 500 image tokens
 const PARALLEL = 3;
-const CLIENT_TIMEOUT_MS = 11_000; // the server gives the model 8 s; this only catches a stuck request
+const CLIENT_TIMEOUT_MS = 15_000; // the server gives the model 8 s (+ auth, checks, cold start); this only catches a stuck request
 
 const PEN = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4"/></svg>';
 const REASONS = {
@@ -178,7 +178,7 @@ function openDay(date) {
     <ul class="review-list day-list">${list.map((e) => `<li>
       <b>${esc(e.product)}</b>${e.location ? `<span class="day-loc">${esc(e.location)}</span>` : ''}
     </li>`).join('')}</ul>
-    <div class="review-actions">
+    <div class="review-actions day-actions">
       <button class="btn" type="button" data-review="ics-day" data-date="${date}">Add to calendar (.ics)</button>
       <button class="btn btn-primary" type="button" data-review="cancel">Close</button>
     </div>
