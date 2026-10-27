@@ -6,6 +6,7 @@ import { mountPricing, showPricing } from './pricing.js';
 import { friendlyError } from './friendly.js';
 import { mountChat } from './chat.js';
 import { toast } from './toast.js';
+import { mountHow, showHow, hideHow } from './how.js';
 
 // META comes from /api/meta (small): stores from config.js, their status, per-section update
 // times, refresh state and cooldowns. Deals are loaded per section, only when it is opened.
@@ -594,6 +595,7 @@ if (foodSection) mountWolt(foodSection);
 // Follow your discount: product photos → expiry dates on a calendar (public/expiry.js).
 mountFollow(document.querySelector('section[data-view="follow"]'));
 mountPricing(document.querySelector('section[data-view="pricing"]'));
+mountHow(document.querySelector('section[data-view="how-it-works"]'));
 // Deals assistant: floating chat at the bottom-right of every page (public/chat.js).
 mountChat();
 
@@ -651,6 +653,8 @@ function showView() {
   if (currentView === foodSection?.dataset.view) showWolt();
   if (currentView === 'follow') showFollow();
   if (currentView === 'pricing') showPricing();
+  if (currentView === 'how-it-works') showHow();
+  else hideHow();
   if (META) viewFor(currentView)?.ensureLoaded();
   views.find((v) => v.root.dataset.view === currentView)?.fromUrl();
 }
@@ -660,12 +664,13 @@ function navigate(href) {
   showView();
   window.scrollTo({ top: 0 });
 }
-document.querySelector('.nav').addEventListener('click', (e) => {
-  const a = e.target.closest('.nav-item');
-  if (!a || e.metaKey || e.ctrlKey) return;
-  e.preventDefault();
-  navigate(a.getAttribute('href'));
-});
+for (const nav of document.querySelectorAll('.nav'))
+  nav.addEventListener('click', (e) => {
+    const a = e.target.closest('.nav-item');
+    if (!a || e.metaKey || e.ctrlKey) return;
+    e.preventDefault();
+    navigate(a.getAttribute('href'));
+  });
 document.addEventListener('click', (e) => {
   const a = e.target.closest('a[data-view-link]');
   if (!a || e.metaKey || e.ctrlKey) return;
