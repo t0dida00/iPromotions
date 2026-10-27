@@ -202,6 +202,7 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
   h1 { font-size: 20px; }
   .page-head .sub { display: none; }
   .layout { grid-template-columns: 1fr; gap: 12px; }
+  .tools { flex-direction: column; } /* search above the sort select, both full width */
   .cats { position: static; flex-direction: row; overflow-x: auto; max-height: none; padding-bottom: 4px; }
   .cat { flex: none; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
   .cat-row { flex: none; }
@@ -321,6 +322,8 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .btn-primary:hover { filter: brightness(1.08); }
 .btn-primary:disabled { filter: none; cursor: not-allowed; }
+.btn-dark { background: #000; color: #fff; border-color: #000; }
+.btn-dark:hover { border-color: #000; filter: brightness(1.35); }
 .follow { display: flex; flex-direction: column; gap: 16px; padding-top: 20px; padding-bottom: 40px; }
 .follow-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
 .follow-card h2 { margin-bottom: 2px; }
@@ -361,14 +364,14 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .cal-day.today { outline: 2px solid var(--accent); outline-offset: -2px; }
 .cal-num { font-size: 12px; font-weight: 600; color: var(--muted); }
 .cal-day.today .cal-num { color: var(--accent); }
-.chip { display: block; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chip.use_by { background: #f8e1e5; color: #9b1f3d; }
-.chip.best_before { background: #fdf0d2; color: #8a5a00; }
+.cal-day.has-items { cursor: pointer; }
+.cal-day.has-items:hover, .cal-day.has-items:focus-visible { outline: 2px solid var(--line); outline-offset: -2px; }
+.cal-day.today.has-items:hover { outline-color: var(--accent); }
+.chip { display: block; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: #e3f1ea; color: var(--accent); }
 .chip.more { background: none; color: var(--muted); padding: 0 6px; }
-.cal-legend { display: flex; gap: 8px; margin: 10px 0 0; }
-.cal-legend .chip { display: inline-block; }
 
-.upcoming { list-style: none; margin: 0; padding: 0; }
+/* At most 300px tall, then it scrolls; the side padding keeps the highlighted "today" row (margin -10px) unclipped. */
+.upcoming { list-style: none; max-height: 300px; overflow-y: auto; margin: 0 -10px; padding: 0 10px; }
 .upcoming li { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .upcoming li.past { opacity: 0.55; }
 .upcoming li.soon .up-when b { color: var(--sale); }
@@ -380,12 +383,12 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .up-when span { color: var(--muted); font-size: 12px; }
 .up-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .up-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.up-loc { display: flex; align-items: center; gap: 4px; min-width: 0; padding-left: 6px; color: var(--muted); }
+.up-loc { display: flex; align-items: center; gap: 0; min-width: 0; padding-left: 6px; color: var(--muted); }
 .up-loc svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; }
-.up-loc input { min-width: 0; flex: 1; font: inherit; font-size: 13px; padding: 2px 6px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); }
+/* icon → text = 1px border + 3px padding = 4px */
+.up-loc input { min-width: 0; flex: 1; font: inherit; font-size: 13px; padding: 2px 6px 2px 3px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); }
 .up-loc input::placeholder { color: var(--muted); }
 .up-loc input:hover, .up-loc input:focus { border-color: var(--line); background: var(--bg); outline: none; }
-.up-what .chip { flex: none; }
 .up-name { min-width: 0; flex: 1; font: inherit; font-weight: 600; padding: 4px 6px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); }
 .up-name:hover, .up-name:focus { border-color: var(--line); background: var(--bg); outline: none; }
 .up-tools { display: flex; gap: 6px; align-items: center; }
@@ -396,9 +399,7 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
   .cal-day { min-height: 54px; }
   /* phones: a coloured dot per product (font-size 0 left the chip 0 px wide, so give it a size) */
   .cal-dots { justify-content: flex-start; gap: 3px; }
-  .cal-day .chip { flex: none; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
-  .cal-day .chip.use_by { background: #9b1f3d; }
-  .cal-day .chip.best_before { background: #d99a1e; }
+  .cal-day .chip { flex: none; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; background: var(--accent); }
   .cal-day .chip.more { display: none; }
   .upcoming li { grid-template-columns: 1fr; gap: 6px; }
 }
@@ -439,12 +440,14 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .review h2 { margin: 0; padding: 20px 20px 4px; }
 .review > .hint { margin: 0; padding: 0 20px 12px; }
 .review-list { list-style: none; margin: 0; padding: 4px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.day-list li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--bg); }
+.day-loc { color: var(--muted); font-size: 13px; }
 .review-row { position: relative; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 12px 40px 12px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
 .review-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
 .review-thumb.manual { display: grid; place-items: center; background: var(--surface); }
 .review-thumb.manual svg { width: 26px; height: 26px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .review-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 10px; }
-.review-product, .review-location { grid-column: 1 / -1; }
+.review-product { grid-column: 1 / -1; }
 .review-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .review-field input, .review-field select { width: 100%; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; font-weight: 400; }
 .review-field input:focus, .review-field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }

@@ -1,7 +1,7 @@
 // "Follow your discount": markets often discount meat and other fresh food on its last day. The
 // user photographs products, presses "Check", and the server's vision model reads each label's
 // use-by or best-before date (POST /api/expiry/scan, src/expiry.js). The dates found are listed in a
-// review dialog where the user fixes the product name, date and kind, adds a location, and saves
+// review dialog where the user fixes the product name and date, adds a location, and saves
 // (or cancels); "Enter manually" opens the same dialog with an empty row and no photo. Saved dates go to the user's account and are shown on a month calendar and an
 // upcoming list, each downloadable as an .ics event. Signed-in users only; photos are shrunk here
 // and never stored.
@@ -13,7 +13,6 @@ const PARALLEL = 3;
 const CLIENT_TIMEOUT_MS = 11_000; // the server gives the model 8 s; this only catches a stuck request
 
 const PEN = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4"/></svg>';
-const KIND = { use_by: 'Use by', best_before: 'Best before' };
 const REASONS = {
   not_label: "This doesn't look like a product label.",
   no_date: 'No expiry date found in this photo.',
@@ -44,6 +43,7 @@ function firstOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 const daysUntil = (date) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today()}T00:00:00Z`)) / 86_400_000);
+const fmtDmy = (date) => date.split('-').reverse().join('/'); // YYYY-MM-DD → dd/mm/yyyy (Upcoming)
 const fmtDay = (date) => new Date(`${date}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 function relative(date) {
   const n = daysUntil(date);
@@ -168,6 +168,24 @@ function openReview() {
   if (!dialog.open) dialog.showModal();
 }
 
+// A calendar day with dates: what runs out that day, in the same <dialog>.
+function openDay(date) {
+  const list = (entries ?? []).filter((e) => e.date === date);
+  if (!list.length || !dialog) return;
+  dialog.innerHTML = `<form class="review" method="dialog">
+    <h2 id="review-title">${esc(fmtDmy(date))}</h2>
+    <p class="hint">${relative(date)} · ${list.length} ${list.length > 1 ? 'products' : 'product'} on their last day.</p>
+    <ul class="review-list day-list">${list.map((e) => `<li>
+      <b>${esc(e.product)}</b>${e.location ? `<span class="day-loc">${esc(e.location)}</span>` : ''}
+    </li>`).join('')}</ul>
+    <div class="review-actions">
+      <button class="btn" type="button" data-review="ics-day" data-date="${date}">Add to calendar (.ics)</button>
+      <button class="btn btn-primary" type="button" data-review="cancel">Close</button>
+    </div>
+  </form>`;
+  if (!dialog.open) dialog.showModal();
+}
+
 function reviewRow(p) {
   const d = p.draft;
   return `<li class="review-row" data-id="${p.id}">
@@ -177,8 +195,6 @@ function reviewRow(p) {
         <input name="product" value="${esc(d.product)}" placeholder="e.g. Chicken fillet" maxlength="60" required /></label>
       <label class="review-field"><span>Date</span>
         <input name="date" type="date" value="${esc(d.date)}" required /></label>
-      <label class="review-field"><span>Type</span>
-        <select name="kind">${Object.entries(KIND).map(([k, label]) => `<option value="${k}"${k === d.kind ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
       <label class="review-field review-location"><span>Location</span>
         <input name="location" value="${esc(d.location)}" placeholder="e.g. Prisma Linnanmaa" maxlength="60" /></label>
     </div>
@@ -192,7 +208,7 @@ function readDrafts() {
     const p = photos.find((x) => x.id === row.dataset.id);
     if (!p) continue;
     const val = (name) => row.querySelector(`[name="${name}"]`).value.trim();
-    p.draft = { product: val('product'), date: val('date'), kind: val('kind'), location: val('location') };
+    p.draft = { ...p.draft, product: val('product'), date: val('date'), location: val('location') }; // kind isn't shown; keep the scanned one
   }
 }
 
@@ -230,8 +246,10 @@ function mountReview() {
   dialog.setAttribute('aria-labelledby', 'review-title');
   document.body.append(dialog);
   dialog.addEventListener('click', (e) => {
-    const act = e.target.closest('[data-review]')?.dataset.review;
-    if (act === 'cancel') {
+    const el = e.target.closest('[data-review]');
+    const act = el?.dataset.review;
+    if (act === 'ics-day') downloadIcs(entries.filter((x) => x.date === el.dataset.date), 'expiry-dates.ics');
+    else if (act === 'cancel') {
       readDrafts();
       dialog.close();
     } else if (act === 'drop') {
@@ -282,7 +300,7 @@ function downloadIcs(list, name) {
     `DTSTAMP:${stamp}`,
     `DTSTART;VALUE=DATE:${compact(e.date)}`,
     `DTEND;VALUE=DATE:${compact(next(e.date))}`,
-    `SUMMARY:${text(`${KIND[e.kind]}: ${e.product}`)}`,
+    `SUMMARY:${text(e.product)}`,
     `DESCRIPTION:${text('Last day — look for the discount sticker in the store.')}`,
     ...(e.location ? [`LOCATION:${text(e.location)}`] : []),
     'BEGIN:VALARM', 'TRIGGER:-PT6H', 'ACTION:DISPLAY', `DESCRIPTION:${text(`${e.product} expires tomorrow`)}`, 'END:VALARM',
@@ -321,9 +339,8 @@ function renderDashUpcoming() {
     <ul class="upcoming dash-up">${next.slice(0, DASH_UPCOMING).map((e) => {
       const n = daysUntil(e.date);
       return `<li class="${n === 0 ? 'today' : n === 1 ? 'soon' : ''}">
-        <span class="up-when"><b>${relative(e.date)}</b><span>${esc(fmtDay(e.date))}</span></span>
+        <span class="up-when"><b>${relative(e.date)}</b><span>${esc(fmtDmy(e.date))}</span></span>
         <span class="up-what"><b class="dash-up-name">${esc(e.product)}</b>${e.location ? `<span class="dash-up-loc">${esc(e.location)}</span>` : ''}</span>
-        <span class="chip ${e.kind}">${KIND[e.kind]}</span>
       </li>`;
     }).join('')}</ul>
   </div>`;
@@ -356,7 +373,7 @@ function photoCard() {
     <div class="follow-head">
       <div><h2>Add products</h2><p class="hint">Photograph the label so the date is sharp and readable, or enter the date yourself. Packing dates are ignored.</p></div>
       <div class="follow-pick">
-        <label class="btn"><input type="file" accept="image/*" capture="environment" data-act="files" hidden />Take photo</label>
+        <label class="btn btn-dark"><input type="file" accept="image/*" capture="environment" data-act="files" hidden />Take photo</label>
         <label class="btn"><input type="file" accept="image/*" multiple data-act="files" hidden />Choose photos</label>
         <button class="btn follow-manual" data-act="manual-add">Enter manually</button>
       </div>
@@ -393,8 +410,8 @@ function photoItem(p) {
     preparing: '<span class="tray-status">Preparing…</span>',
     ready: '<span class="tray-status">Ready</span>',
     checking: '<span class="tray-status busy"><span class="spin"></span>Reading date…</span>',
-    found: p.draft ? `<span class="tray-status">${KIND[p.draft.kind]} ${esc(fmtDay(p.draft.date))} · not saved</span>` : '',
-    done: r ? `<span class="tray-status ok">Saved · ${KIND[r.kind]} ${esc(fmtDay(r.date))}</span>` : '',
+    found: p.draft ? `<span class="tray-status">${esc(fmtDay(p.draft.date))} · not saved</span>` : '',
+    done: r ? `<span class="tray-status ok">Saved · ${esc(fmtDay(r.date))}</span>` : '',
     failed: `<span class="tray-status bad">${esc(p.error)}</span>`,
   }[p.status];
   return `<li class="tray-item ${p.status}">
@@ -420,9 +437,9 @@ function calendarCard() {
   for (let d = new Date(start); d <= end || cells.length % 7; d.setDate(d.getDate() + 1)) {
     const key = ymd(d);
     const items = byDay[key] ?? [];
-    cells.push(`<div class="cal-day${d.getMonth() !== month.getMonth() ? ' other' : ''}${key === today() ? ' today' : ''}"${items.length ? ` title="${esc(items.map((e) => `${KIND[e.kind]}: ${e.product}${e.location ? ` (${e.location})` : ''}`).join('\n'))}"` : ''}>
+    cells.push(`<div class="cal-day${d.getMonth() !== month.getMonth() ? ' other' : ''}${key === today() ? ' today' : ''}${items.length ? ' has-items' : ''}"${items.length ? ` data-act="day" data-date="${key}" role="button" tabindex="0" title="${esc(items.map((e) => `${e.product}${e.location ? ` (${e.location})` : ''}`).join('\n'))}"` : ''}>
       <span class="cal-num">${d.getDate()}</span>
-      ${items.length ? `<span class="cal-dots">${items.slice(0, 4).map((e) => `<span class="chip ${e.kind}">${esc(e.product)}</span>`).join('')}</span>` : ''}
+      ${items.length ? `<span class="cal-dots">${items.slice(0, 4).map((e) => `<span class="chip">${esc(e.product)}</span>`).join('')}</span>` : ''}
     </div>`);
   }
   const title = month.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
@@ -436,7 +453,6 @@ function calendarCard() {
       </div>
     </div>
     <div class="cal-grid">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((w) => `<span class="cal-wd">${w}</span>`).join('')}${cells.join('')}</div>
-    <p class="cal-legend"><span class="chip use_by">Use by</span><span class="chip best_before">Best before</span></p>
   </div>`;
 }
 
@@ -453,11 +469,10 @@ function upcomingCard() {
     ${list.length ? `<ul class="upcoming">${list.map((e) => {
       const n = daysUntil(e.date);
       return `<li class="${n < 0 ? 'past' : n === 0 ? 'today' : n === 1 ? 'soon' : ''}">
-        <span class="up-when"><b>${relative(e.date)}</b><span>${esc(fmtDay(e.date))}</span></span>
+        <span class="up-when"><b>${relative(e.date)}</b><span>${esc(fmtDmy(e.date))}</span></span>
         <span class="up-what">
           <span class="up-line">
             <input class="up-name" value="${esc(e.product)}" data-act="rename" data-id="${e.id}" aria-label="Product name" maxlength="60" />
-            <span class="chip ${e.kind}">${KIND[e.kind]}</span>
           </span>
           <label class="up-loc">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
@@ -491,6 +506,7 @@ export function mountFollow(section) {
       render();
     } else if (act === 'check') checkAll();
     else if (act === 'review') openReview();
+    else if (act === 'day') openDay(el.dataset.date);
     else if (act === 'retry') check(photos.find((p) => p.id === id));
     else if (act === 'delete') deleteEntry(id);
     else if (act === 'ics') downloadIcs(entries.filter((x) => x.id === id), 'expiry-date.ics');
@@ -502,6 +518,10 @@ export function mountFollow(section) {
       month = new Date(month.getFullYear(), month.getMonth() + Number(el.dataset.step), 1);
       render();
     }
+  });
+  root.addEventListener('keydown', (e) => {
+    const el = e.target.closest('[data-act="day"]');
+    if (el && (e.key === 'Enter' || e.key === ' ')) (e.preventDefault(), openDay(el.dataset.date));
   });
   root.addEventListener('change', (e) => {
     const el = e.target;
