@@ -271,6 +271,8 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
 .wolt { padding-top: 24px; padding-bottom: 8px; }
 .wolt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .wolt-head .hint { display: flex; align-items: center; gap: 8px; }
+/* "in Oulu": the default area, so visitors elsewhere know to press Update location */
+.wolt-city { background: #dcefe5; color: var(--accent); font-weight: 700; padding: 0 6px; border-radius: 6px; }
 .wolt .grid { margin-top: 4px; }
 .wolt-tools { padding: 12px 0 4px; max-width: 420px; }
 .wolt-card .img { aspect-ratio: 16 / 9; padding: 0; overflow: hidden; background: #e9e1d0; }

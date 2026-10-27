@@ -1,6 +1,7 @@
-// "Wolt offers near you" panel in Food Promotions: restaurant offers on Wolt around the browser's
-// location, from GET /api/wolt (looked up live by the server, cached per ~1 km area). Only offers
-// open to everyone are listed, not Wolt+ member deals.
+// Wolt panel in Food Promotions: restaurant offers on Wolt from GET /api/wolt (looked up live by the
+// server, cached per ~1 km area). It opens on the default location (Oulu) without asking for the
+// browser's location; "Update location" asks for it and shows offers near the visitor instead.
+// Only offers open to everyone are listed, not Wolt+ member deals.
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 // Links and images come from scraped sites: only http(s) URLs (or our own /paths), never javascript:.
 const safeUrl = (u) => (/^(https?:\/\/|\/)/i.test(String(u ?? '')) ? esc(u) : '');
@@ -21,7 +22,7 @@ const FILTERS = {
 
 let root = null;
 let data = null;
-let state = { filter: 'discount', shown: PAGE, status: 'idle', message: '', q: '', rawQ: '' };
+let state = { filter: 'discount', shown: PAGE, status: 'idle', message: '', note: '', nearMe: false, q: '', rawQ: '' };
 
 // Search by restaurant name, ignoring case and accents ("hese" finds "Hesburger", "cafe" finds "Café").
 const fold = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -39,22 +40,27 @@ function locate() {
   });
 }
 
-async function load() {
-  state = { ...state, status: 'locating', message: '' };
+// useLocation: false = default location (Oulu), true = ask the browser where the visitor is.
+async function load(useLocation = false) {
+  state = { ...state, status: useLocation ? 'locating' : 'loading', message: '', note: '', nearMe: useLocation };
   render();
-  const pos = await locate();
+  const pos = useLocation ? await locate() : null;
+  if (useLocation && !pos) state.note = "Couldn't get your location, so these are the offers in Oulu.";
   state.status = 'loading';
   render();
   let res = await fetch(pos ? `/api/wolt?lat=${pos.lat}&lon=${pos.lon}` : '/api/wolt');
   // Outside Finland: fall back to the default location.
-  if (res.status === 400 && pos) res = await fetch('/api/wolt');
+  if (res.status === 400 && pos) {
+    state.note = 'Wolt offers here are for Finland only, so these are the offers in Oulu.';
+    res = await fetch('/api/wolt');
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     state.status = 'error';
     state.message = res.status === 429 ? `${body.error ?? 'Too many lookups.'} Try again in ${Math.ceil((body.retryAfterSeconds ?? 60) / 60)} min.` : body.error ?? 'Could not load Wolt offers.';
     return render();
   }
-  data = { ...body, located: Boolean(pos) };
+  data = { ...body, located: !body.isDefault };
   const hasDiscounts = data.venues.some(FILTERS.discount.test);
   state = { ...state, status: 'ready', filter: hasDiscounts ? 'discount' : 'all', shown: PAGE };
   render();
@@ -83,15 +89,18 @@ function render() {
   if (!root) return;
   const active = document.activeElement?.id === 'wolt-q' ? document.activeElement : null;
   const focus = active ? { start: active.selectionStart, end: active.selectionEnd } : null;
+  const city = data?.city ?? 'Oulu';
   const where = data
-    ? data.located ? `near ${esc(data.location.address ?? 'you')}` : `near ${esc(data.location.address ?? 'Oulu city center')} (default — your location isn't shared)`
+    ? data.located
+      ? `near ${esc(data.location.address ?? 'you')}`
+      : `<mark class="wolt-city">in ${esc(city)}</mark>${data.location.address ? ` (${esc(data.location.address)})` : ''} — not there? Press Update location`
     : '';
   const status = {
     idle: '',
     locating: 'Asking your browser for your location…',
-    loading: 'Looking up Wolt offers near you — a new area takes a few seconds…',
+    loading: `Looking up Wolt offers ${state.nearMe ? 'near you' : 'in Oulu'}… a new area takes a few seconds`,
     error: esc(state.message),
-    ready: `Offers open to everyone, no Wolt+ needed · ${where} · checked ${data ? checkedAt(data.fetchedAt) : ''}`,
+    ready: `${state.note ? `${esc(state.note)} · ` : ''}Offers open to everyone, no Wolt+ needed · ${where} · checked ${data ? checkedAt(data.fetchedAt) : ''}`,
   }[state.status];
   const busy = state.status === 'locating' || state.status === 'loading';
 
@@ -112,8 +121,8 @@ function render() {
   }
   root.innerHTML = `<div class="wolt-head">
       <div>
-        <h2>Wolt offers near you</h2>
-        <p class="hint">${busy ? '<span class="pulse"></span>' : ''}${status}</p>
+        <h2>${data && !data.located ? `Wolt offers <mark class="wolt-city">in ${esc(city)}</mark>` : 'Wolt offers near you'}</h2>
+        <p class="hint">${busy ? '<span class="pulse"></span>' : ''}<span>${status}</span></p>
       </div>
       <button class="btn btn-sm" data-wolt-locate ${busy ? 'disabled' : ''}>${state.status === 'error' ? 'Try again' : 'Update location'}</button>
     </div>${body}`;
@@ -141,7 +150,8 @@ export function mountWolt(section) {
       state.shown += PAGE;
       return render();
     }
-    if (e.target.closest('[data-wolt-locate]')) load();
+    // "Try again" repeats the failed lookup (Oulu or near you); "Update location" asks where the visitor is.
+    if (e.target.closest('[data-wolt-locate]')) load(state.status === 'error' ? state.nearMe : true);
   });
   root.addEventListener('input', (e) => {
     if (e.target.id !== 'wolt-q') return;

@@ -188,9 +188,9 @@ app.post('/api/crawl', requireOwner, crawlLimit, async (req, res) => {
 
 // Wolt offers near a location (Food Promotions). A cached area answers at once; a new one opens
 // wolt.com in a headless browser (~20 s), so only those lookups count against the `wolt` limit.
-// Without coordinates (location not shared) the default location from config.js is used.
+// Without coordinates the default location from config.js (Oulu) is used.
 app.get('/api/wolt', async (req, res) => {
-  const def = config.wolt?.defaultLocation ?? { lat: 65.0121, lon: 25.4651 };
+  const def = config.wolt?.defaultLocation ?? { lat: 65.0121, lon: 25.4651, city: 'Oulu' };
   const hasCoords = req.query.lat != null && req.query.lon != null;
   const lat = hasCoords ? Number(req.query.lat) : def.lat;
   const lon = hasCoords ? Number(req.query.lon) : def.lon;
@@ -199,7 +199,7 @@ app.get('/api/wolt', async (req, res) => {
     return res.status(400).json({ error: 'Location must be in Finland', outside: true });
   const send = async () => {
     try {
-      res.json({ ...(await woltOffers(lat, lon)), isDefault: !hasCoords });
+      res.json({ ...(await woltOffers(lat, lon)), isDefault: !hasCoords, city: hasCoords ? null : def.city ?? null });
     } catch (e) {
       console.error('[wolt]', e.message); // details stay in the log; the visitor gets plain words
       const error = /timeout/i.test(e.message)

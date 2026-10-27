@@ -49,12 +49,12 @@ export default {
   },
 
   // Wolt offers in Food Promotions are looked up live for the visitor's location (src/wolt.js),
-  // not crawled. Results are cached per ~1 km area; `defaultLocation` is used when the browser
-  // doesn't share its location.
+  // not crawled. Results are cached per ~1 km area. The panel opens on `defaultLocation` (Oulu);
+  // the visitor's own location is only used after they press "Update location".
   wolt: {
     cacheMinutes: 6 * 60, // 6 hours: nearby visitors share one lookup (each new one opens Chromium, ~50 s on Vercel)
     maxCachedLocations: 200,
-    defaultLocation: { lat: 65.0121, lon: 25.4651, name: 'Oulu city center' },
+    defaultLocation: { lat: 65.0121, lon: 25.4651, city: 'Oulu', name: 'Oulu city center' },
   },
 
   // Each key becomes a store tab in the UI. `type` picks the crawler; `name` is the tab label,
