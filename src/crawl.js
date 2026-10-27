@@ -109,7 +109,16 @@ export function crawlAll(log = console.log, trigger = 'cli', only = null) {
       saveProgress();
       log(`[crawl] ${key}…`);
       try {
-        results[key] = (await CRAWLERS[opts.type](opts, log)).map((d) => enrich(d, key, opts.segment));
+        // firstSeen: when this deal first showed up (kept from crawl to crawl), for the "New" badge.
+        // Deals already there before firstSeen existed keep null (not new), and so does a store's
+        // very first crawl, or every deal would look new.
+        const before = new Map(previous(key).map((d) => [d.id, d]));
+        const now = new Date().toISOString();
+        results[key] = (await CRAWLERS[opts.type](opts, log)).map((d) => {
+          const e = enrich(d, key, opts.segment);
+          const old = before.get(e.id);
+          return { ...e, firstSeen: old ? old.firstSeen ?? null : before.size ? now : null };
+        });
         sources[key] = {
           ok: true,
           ...summarize(results[key]),

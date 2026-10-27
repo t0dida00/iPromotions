@@ -189,6 +189,18 @@ function setOpen(open) {
   }
 }
 
+// Opens the assistant with a question typed in but not sent (sending can use a check), e.g.
+// "Find deals like this" on a Follow date. Signed out, the panel shows its sign-in box.
+export function openChat(prefill = '') {
+  if (!els) return;
+  setOpen(true);
+  if (!user) return;
+  els.input.value = prefill.slice(0, MAX);
+  renderChrome();
+  els.input.focus();
+  els.input.setSelectionRange(els.input.value.length, els.input.value.length);
+}
+
 export function mountChat() {
   const root = document.createElement('div');
   root.className = 'chat';

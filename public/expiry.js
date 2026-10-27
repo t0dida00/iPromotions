@@ -7,6 +7,7 @@
 // and never stored.
 import { idToken, openDialog } from './auth.js';
 import { toast } from './toast.js';
+import { openChat } from './chat.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const MAX_SIDE = 768; // px: keeps a photo around 500 image tokens
@@ -14,6 +15,7 @@ const PARALLEL = 3;
 const UNDO_MS = 5000; // deleting waits this long behind an Undo button
 const CLIENT_TIMEOUT_MS = 15_000; // the server gives the model 8 s (+ auth, checks, cold start); this only catches a stuck request
 
+const SEARCH = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>';
 const PEN = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4"/></svg>';
 const REASONS = {
   not_label: "This doesn't look like a product label.",
@@ -551,6 +553,7 @@ function upcomingRow(e) {
     </span>
     <span class="up-tools">
       <input type="date" value="${e.date}" data-act="redate" data-id="${e.id}" aria-label="Change date" />
+      ${n >= 0 ? `<button class="btn btn-sm btn-icon up-find" data-act="find" data-id="${e.id}" aria-label="Find deals like ${esc(e.product)}" title="Find deals like this">${SEARCH}</button>` : ''}
       <button class="btn btn-sm" data-act="ics" data-id="${e.id}" title="Add to calendar (.ics)">.ics</button>
       <button class="btn btn-sm btn-icon" data-act="delete" data-id="${e.id}" aria-label="Delete">×</button>
     </span>
@@ -578,6 +581,7 @@ export function mountFollow(section) {
     else if (act === 'day-add') addManual(el.dataset.date);
     else if (act === 'retry') check(photos.find((p) => p.id === id));
     else if (act === 'delete') deleteEntry(id);
+    else if (act === 'find') openChat(`Discounted ${entries.find((x) => x.id === id)?.product ?? ''}`.trim());
     else if (act === 'clear-past') deleteEntries(entries.filter((x) => daysUntil(x.date) < 0).map((x) => x.id));
     else if (act === 'ics') downloadIcs(entries.filter((x) => x.id === id), 'expiry-date.ics');
     else if (act === 'ics-all') downloadIcs(entries.filter((x) => daysUntil(x.date) >= 0), 'expiry-dates.ics');

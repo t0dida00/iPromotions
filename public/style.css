@@ -189,6 +189,7 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
 /* No photo, or it failed to load: a price-tag outline instead of an empty white box. */
 .card .img.noimg { background: #f7f1e4 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9bda5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z'/%3E%3Ccircle cx='7.5' cy='7.5' r='1.5'/%3E%3C/svg%3E") no-repeat center / 34%; }
 .card .ends { position: absolute; left: 10px; bottom: 10px; padding: 2px 8px; border-radius: 999px; background: #fdf0d2; color: #8a5a00; font-size: 11px; font-weight: 700; }
+.card .new { position: absolute; right: 10px; bottom: 10px; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; }
 .card img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .card .pct { position: absolute; top: 10px; left: 10px; background: var(--sale); color: #fff; font-weight: 700; font-size: 13px; padding: 3px 8px; border-radius: 999px; }
 .card .src { position: absolute; top: 10px; right: 10px; font-size: 11px; font-weight: 700; color: #fff; padding: 3px 8px; border-radius: 999px; }
@@ -419,6 +420,7 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .up-name { min-width: 0; flex: 1; font: inherit; font-weight: 600; padding: 4px 6px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); }
 .up-name:hover, .up-name:focus { border-color: var(--line); background: var(--bg); outline: none; }
 .up-tools { display: flex; gap: 6px; align-items: center; }
+.up-find svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .up-tools input { font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
 
 @media (max-width: 760px) {

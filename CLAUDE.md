@@ -42,7 +42,9 @@ navegadores automatizados), `segment` la sección (`groceries` por defecto, `clo
 2. Cada crawler (`src/crawlers/<type>.js`) exporta `crawlX(opts, log)` y devuelve deals con forma
    `{ id: '<type>:<sku>', name, brand, category, price, regularPrice, dealText, image, url, validUntil }`.
 3. `enrich()` reescribe el `id` con la clave de la tienda, añade `source`, `segment`,
-   `discountPct` y `group` (categoría unificada vía `unifyCategory` de `src/categories.js`).
+   `discountPct` y `group` (categoría unificada vía `unifyCategory` de `src/categories.js`), y pasa
+   un `validUntil` de solo fecha al final de ese día en Helsinki. `crawlOne` añade `firstSeen`
+   (se conserva entre crawls; `null` si ya existía o en el primer crawl), que da la etiqueta "New".
 4. Si un crawler lanza error, se conservan los deals anteriores de esa tienda y se marca `ok: false`.
    Los crawlers deben lanzar (`throw`) cuando la página cambia de estructura, no devolver `[]`.
 5. Solo se reescriben los ficheros de los segmentos afectados.
@@ -84,7 +86,7 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
 
 **Servidor (`src/server.js`):**
 - `GET /api/meta` (tiendas, estado, cooldowns; se consulta con polling), `GET /api/deals?segment=`
-  (envía el fichero del segmento con ETag/304), `GET /api/status` (dashboard),
+  (sin ofertas caducadas —`isLive` de `src/validity.js`—, con gzip y ETag por contenido/304), `GET /api/status` (dashboard),
   `POST /api/crawl[?segment=]` (solo acepta `segment`; aplica cooldown por tienda y devuelve 429
   si no queda nada que hacer). Solo para propietarios: `requireOwner` (`src/auth.js`) verifica el ID
   token de Firebase (`Authorization: Bearer`, firma RS256 contra los certificados de Google, sin
@@ -147,7 +149,7 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   las de `config.sectionSchedules` tienen el suyo (Food: diario a las 09:00). El dashboard muestra el
   próximo de todos (`nextSchedule()` en `src/server.js`).
 
-**Frontend (`public/`):** HTML/JS vanilla. `/dashboard` (también `/`), `/promotions`, `/clothing`,
+**Frontend (`public/`):** HTML/JS vanilla. `/dashboard`, `/promotions` (también `/`), `/clothing`,
 `/electronics`, `/food` y `/follow` sirven el mismo `index.html`; `app.js` muestra la `<section data-view>` según la ruta.
 Cada `<section data-segment>` carga sus deals solo al abrirse. Los favoritos (categorías con ★)
 se guardan en localStorage por sección sin sesión, y en la cuenta con sesión (`account.active` en

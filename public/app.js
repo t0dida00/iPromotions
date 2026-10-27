@@ -12,6 +12,7 @@ import { toast } from './toast.js';
 let STORES = {};
 let META = null;
 const PAGE = 60;
+const NEW_DAYS = 7; // a deal first seen within this many days gets the "New" badge
 const FAV_PREVIEW = 20; // deals per section on the Favorites page; the rest are in the section itself
 const views = []; // one PromoView per promotions section
 
@@ -78,8 +79,9 @@ function card(d) {
   const until = d.validUntil ? `Valid until ${new Date(d.validUntil).toLocaleDateString('en-GB')}` : seen ? `Price seen ${dmy(seen)}` : '';
   const left = d.validUntil ? daysFrom(d.validUntil) : null;
   const ends = left === 0 ? 'Ends today' : left === 1 ? 'Ends tomorrow' : '';
+  const isNew = d.firstSeen && Date.now() - Date.parse(d.firstSeen) < NEW_DAYS * 86_400_000;
   return `<a class="card" href="${safeUrl(d.url)}" target="_blank" rel="noopener">
-    <div class="img${d.image ? '' : ' noimg'}">${d.image ? `<img src="${safeUrl(d.image)}" alt="" loading="lazy" />` : ''}${ends ? `<span class="ends">${ends}</span>` : ''}</div>
+    <div class="img${d.image ? '' : ' noimg'}">${d.image ? `<img src="${safeUrl(d.image)}" alt="" loading="lazy" />` : ''}${ends ? `<span class="ends">${ends}</span>` : ''}${isNew ? '<span class="new" title="New this week">New</span>' : ''}</div>
     ${d.discountPct ? `<span class="pct">−${d.discountPct}%</span>` : ''}
     <span class="src" style="background:${esc(s?.color ?? '#666')}">${esc(s?.name ?? d.store)}</span>
     <div class="body">
