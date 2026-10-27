@@ -16,8 +16,11 @@ const ERRORS = {
   'auth/unauthorized-domain': 'This address is not an authorized domain in the Firebase project.',
   'auth/network-request-failed': 'Could not reach Google. Check your connection and try again.',
 };
+// Pop-ups that can't open here (blocked, or in-app browsers such as Instagram's): sign in by
+// leaving for Google's page and coming back instead.
+const USE_REDIRECT = new Set(['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment']);
 
-let fb = null; // { auth, signInWithPopup, GoogleAuthProvider, signOut } once Firebase is loaded
+let fb = null; // { auth, signInWithPopup, signInWithRedirect, GoogleAuthProvider, signOut } once Firebase is loaded
 
 // The user's photo, or their initial when Google has no photo.
 const avatar = (user) =>
@@ -79,21 +82,25 @@ export function openDialog() {
 
 async function signIn() {
   const btn = $('google-signin');
-  const note = $('login-note');
   btn.disabled = true;
-  note.hidden = true;
+  $('login-note').hidden = true;
   try {
     await fb.signInWithPopup(fb.auth, new fb.GoogleAuthProvider());
     $('login-dialog').close(); // the sidebar updates through onAuthStateChanged
   } catch (err) {
-    if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
-      console.error('[auth]', err);
-      note.textContent = ERRORS[err.code] ?? 'Sign-in failed, please try again.';
-      note.hidden = false;
-    }
+    if (USE_REDIRECT.has(err.code)) return fb.signInWithRedirect(fb.auth, new fb.GoogleAuthProvider()).catch(showSignInError);
+    showSignInError(err);
   } finally {
     btn.disabled = false;
   }
+}
+
+function showSignInError(err) {
+  if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+  console.error('[auth]', err);
+  const note = $('login-note');
+  note.textContent = ERRORS[err.code] ?? 'Sign-in failed, please try again.';
+  note.hidden = false;
 }
 
 // ── Profile dialog: avatar, name, email, location and potential postcode ─────────────────────
@@ -189,8 +196,10 @@ export async function initAuth() {
   try {
     const [{ initializeApp }, authLib] = await Promise.all([import(`${FIREBASE}/firebase-app.js`), import(`${FIREBASE}/firebase-auth.js`)]);
     const auth = authLib.getAuth(initializeApp(firebase));
-    fb = { auth, signInWithPopup: authLib.signInWithPopup, GoogleAuthProvider: authLib.GoogleAuthProvider, signOut: authLib.signOut };
+    fb = { auth, signInWithPopup: authLib.signInWithPopup, signInWithRedirect: authLib.signInWithRedirect, GoogleAuthProvider: authLib.GoogleAuthProvider, signOut: authLib.signOut };
     authLib.onAuthStateChanged(auth, renderAccount); // also fires once with the restored session
+    // Back from a redirect sign-in that failed: say why (success arrives through onAuthStateChanged).
+    authLib.getRedirectResult(auth).catch((err) => (openDialog(), showSignInError(err)));
   } catch (err) {
     console.error('[auth] Could not load Firebase:', err);
     renderAccount(null);

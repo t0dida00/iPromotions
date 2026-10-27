@@ -5,6 +5,7 @@ import { mountFollow, showFollow } from './expiry.js';
 import { mountPricing, showPricing } from './pricing.js';
 import { friendlyError } from './friendly.js';
 import { mountChat } from './chat.js';
+import { toast } from './toast.js';
 
 // META comes from /api/meta (small): stores from config.js, their status, per-section update
 // times, refresh state and cooldowns. Deals are loaded per section, only when it is opened.
@@ -66,11 +67,19 @@ const dealText = (t) =>
     .replace(/^Kampanja$/, 'Campaign')
     .replace(/^Halvempi hinta$/, 'Lower price');
 
+// Whole days from today to a date (0 = today), by the visitor's calendar.
+const daysFrom = (iso) => Math.round((new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86_400_000);
+const dmy = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+
 function card(d) {
   const s = STORES[d.source];
-  const until = d.validUntil ? `Valid until ${new Date(d.validUntil).toLocaleDateString('en-GB')}` : '';
+  // Many stores give no end date: then say when we last saw the price, so old offers look old.
+  const seen = META?.sources?.[d.source]?.crawledAt;
+  const until = d.validUntil ? `Valid until ${new Date(d.validUntil).toLocaleDateString('en-GB')}` : seen ? `Price seen ${dmy(seen)}` : '';
+  const left = d.validUntil ? daysFrom(d.validUntil) : null;
+  const ends = left === 0 ? 'Ends today' : left === 1 ? 'Ends tomorrow' : '';
   return `<a class="card" href="${safeUrl(d.url)}" target="_blank" rel="noopener">
-    <div class="img">${d.image ? `<img src="${safeUrl(d.image)}" alt="" loading="lazy" />` : ''}</div>
+    <div class="img${d.image ? '' : ' noimg'}">${d.image ? `<img src="${safeUrl(d.image)}" alt="" loading="lazy" />` : ''}${ends ? `<span class="ends">${ends}</span>` : ''}</div>
     ${d.discountPct ? `<span class="pct">−${d.discountPct}%</span>` : ''}
     <span class="src" style="background:${esc(s?.color ?? '#666')}">${esc(s?.name ?? d.store)}</span>
     <div class="body">
@@ -225,15 +234,60 @@ class PromoView {
       groups.filter((g) => !this.favorites.has(g)).map(catRow).join('');
 
     const list = deals.filter((d) => this.matches(d)).sort(SORTS[st.sort]);
-    this.el('count').textContent = `${list.length} deals`;
+    this.renderCount(list.length);
     this.el('empty').hidden = list.length > 0 || !this.version;
     this.el('grid').innerHTML = list.slice(0, st.shown).map(card).join('');
     st.remaining = list.length - st.shown;
   }
 
+  // "Showing 60 of 3,869 deals · updated 3 h ago", then the active filters, each removable.
+  renderCount(total) {
+    const st = this.state;
+    const n = (x) => x.toLocaleString('en-GB');
+    const updated = META?.segments?.[this.segment];
+    const chips = [
+      st.store !== 'all' && [`store`, STORES[st.store]?.name ?? st.store],
+      st.group !== 'all' && ['group', st.group],
+      st.q && ['q', `“${this.el('q').value.trim()}”`],
+    ].filter(Boolean);
+    this.el('count').innerHTML = `<span>${total > st.shown ? `Showing ${n(st.shown)} of ${n(total)} deals` : `${n(total)} deal${total === 1 ? '' : 's'}`}${updated ? ` · updated ${esc(ago(updated))}` : ''}</span>
+      ${chips.map(([k, label]) => `<button class="filter-chip" data-clear="${k}" aria-label="Remove filter ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}
+      ${chips.length > 1 ? '<button class="filter-clear" data-clear="all">Clear filters</button>' : ''}`;
+  }
+
   reset(patch) {
     Object.assign(this.state, patch, { shown: PAGE });
     this.render();
+    if (!this.root.hidden) this.toUrl();
+  }
+
+  clearFilters(which) {
+    const patch = which === 'all' ? { store: 'all', group: 'all', q: '' } : which === 'store' ? { store: 'all' } : which === 'group' ? { group: 'all' } : { q: '' };
+    if ('q' in patch) this.el('q').value = '';
+    this.reset(patch);
+  }
+
+  // Filters live in the URL (?store=&cat=&q=&sort=), so a filtered view can be shared, bookmarked or
+  // reloaded. Opening a section without them keeps what was picked before and writes it back.
+  fromUrl() {
+    const p = new URLSearchParams(location.search);
+    if (!['store', 'cat', 'q', 'sort'].some((k) => p.has(k))) return this.toUrl();
+    const q = p.get('q') ?? '';
+    Object.assign(this.state, { store: p.get('store') ?? 'all', group: p.get('cat') ?? 'all', q: q.trim().toLowerCase(), sort: SORTS[p.get('sort')] ? p.get('sort') : 'discount', shown: PAGE });
+    this.el('q').value = q;
+    this.el('sort').value = this.state.sort;
+    if (this.list) this.render();
+  }
+
+  toUrl() {
+    const st = this.state;
+    const p = new URLSearchParams();
+    if (st.store !== 'all') p.set('store', st.store);
+    if (st.group !== 'all') p.set('cat', st.group);
+    if (this.el('q').value.trim()) p.set('q', this.el('q').value.trim());
+    if (st.sort !== 'discount') p.set('sort', st.sort);
+    const url = `${location.pathname}${p.size ? `?${p}` : ''}`;
+    if (url !== location.pathname + location.search) history.replaceState(history.state, '', url);
   }
 
   // Star/unstar a category; also used by the Favorites section. Signed in, it's saved to the
@@ -272,7 +326,18 @@ class PromoView {
       this.root.querySelector('.filters').scrollIntoView();
     });
     this.el('q').addEventListener('input', debounce((e) => this.reset({ q: e.target.value.trim().toLowerCase() })));
-    this.el('count').addEventListener('click', (e) => e.target.closest('[data-retry]') && this.ensureLoaded());
+    this.el('count').addEventListener('click', (e) => {
+      if (e.target.closest('[data-retry]')) return this.ensureLoaded();
+      const chip = e.target.closest('[data-clear]');
+      if (chip) this.clearFilters(chip.dataset.clear);
+    });
+    this.el('empty').addEventListener('click', (e) => e.target.closest('[data-clear]') && this.clearFilters('all'));
+    // A product photo that fails to load (moved or blocked by the store) shows a placeholder instead.
+    this.el('grid').addEventListener('error', (e) => {
+      if (e.target.tagName !== 'IMG') return;
+      e.target.closest('.img')?.classList.add('noimg');
+      e.target.remove();
+    }, true);
     this.el('sort').addEventListener('change', (e) => this.reset({ sort: e.target.value }));
     // Infinite scroll: render more cards as the bottom comes into view.
     new IntersectionObserver((entries) => {
@@ -475,6 +540,16 @@ function shortWhen(iso) {
   return `${day}, ${hhmm(iso)}`;
 }
 
+// "just now", "25 min ago", "3 h ago", "2 days ago".
+function ago(iso) {
+  const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000));
+  if (min < 2) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 36) return `${h} h ago`;
+  return `${Math.round(h / 24)} days ago`;
+}
+
 function renderHeader() {
   const { updatedAt } = META;
   const busy = busyStores();
@@ -502,13 +577,6 @@ function renderHeader() {
         : seg ? 'Refresh now' : 'Refresh all';
     b.title = allCooling ? `Refreshed less than ${META.cooldownMinutes ?? 10} minutes ago` : '';
   }
-}
-
-// Short message at the bottom of the screen.
-function toast(text) {
-  const t = Object.assign(document.createElement('div'), { className: 'toast', textContent: text });
-  document.body.append(t);
-  setTimeout(() => t.remove(), 4000);
 }
 
 for (const section of document.querySelectorAll('section.promo')) views.push(new PromoView(section));
@@ -555,8 +623,9 @@ for (const btn of document.querySelectorAll('.crawl-btn'))
   });
 
 // Sidebar sections: the URL path (/dashboard, /promotions, /clothing, /electronics) picks which
-// <section data-view> is shown. "/" opens the dashboard; old #promotions links still work.
-const DEFAULT_VIEW = 'dashboard';
+// <section data-view> is shown. "/" opens Market Promotions, the deals visitors come for (the
+// dashboard is about the crawlers); old #promotions links still work.
+const DEFAULT_VIEW = 'promotions';
 let currentView = null;
 function showView() {
   const names = [...document.querySelectorAll('.view')].map((v) => v.dataset.view);
@@ -576,6 +645,7 @@ function showView() {
   if (currentView === 'follow') showFollow();
   if (currentView === 'pricing') showPricing();
   if (META) viewFor(currentView)?.ensureLoaded();
+  views.find((v) => v.root.dataset.view === currentView)?.fromUrl();
 }
 // Switch sections without reloading the page.
 function navigate(href) {

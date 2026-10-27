@@ -6,10 +6,12 @@
 // upcoming list, each downloadable as an .ics event. Signed-in users only; photos are shrunk here
 // and never stored.
 import { idToken, openDialog } from './auth.js';
+import { toast } from './toast.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const MAX_SIDE = 768; // px: keeps a photo around 500 image tokens
 const PARALLEL = 3;
+const UNDO_MS = 5000; // deleting waits this long behind an Undo button
 const CLIENT_TIMEOUT_MS = 15_000; // the server gives the model 8 s (+ auth, checks, cold start); this only catches a stuck request
 
 const PEN = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4"/></svg>';
@@ -53,12 +55,19 @@ function relative(date) {
 
 // ── Server calls, as the signed-in user ──────────────────────────────────────────────────────
 async function api(path, { method = 'GET', body, timeout } = {}) {
-  const res = await fetch(path, {
-    method,
-    headers: { authorization: `Bearer ${await idToken()}`, ...(body ? { 'content-type': 'application/json' } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: timeout ? AbortSignal.timeout(timeout) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method,
+      headers: { authorization: `Bearer ${await idToken()}`, ...(body ? { 'content-type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: timeout ? AbortSignal.timeout(timeout) : undefined,
+    });
+  } catch (e) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') throw e;
+    // "Failed to fetch" / "Load failed": the request never got an answer.
+    throw new Error(navigator.onLine === false ? "You're offline. Connect and try again." : "Couldn't reach the server. Check your connection and try again.");
+  }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw Object.assign(new Error(data?.error ?? `Request failed (${res.status})`), { status: res.status, data });
   return data;
@@ -144,8 +153,8 @@ function addByHand(p, date) {
 }
 
 // "Enter manually": a new date with no photo, straight to the review dialog.
-function addManual() {
-  photos.push({ id: crypto.randomUUID(), thumb: null, data: null, status: 'found', result: null, error: '', draft: { kind: 'use_by', date: today(), product: '', location: lastLocation() } });
+function addManual(date = today()) {
+  photos.push({ id: crypto.randomUUID(), thumb: null, data: null, status: 'found', result: null, error: '', draft: { kind: 'use_by', date, product: '', location: lastLocation() } });
   render();
   openReview();
 }
@@ -255,10 +264,25 @@ function mountReview() {
       dialog.close();
     } else if (act === 'drop') {
       readDrafts();
-      // Left out = not wanted: the photo goes too (checking it again would only cost another read).
-      removePhoto(e.target.closest('.review-row').dataset.id);
+      // Left out = not wanted: the photo goes too (checking it again would only cost another read),
+      // unless Undo brings it back within a few seconds.
+      const i = photos.findIndex((x) => x.id === e.target.closest('.review-row').dataset.id);
+      if (i < 0) return;
+      const [p] = photos.splice(i, 1);
+      render();
       if (pending().length) openReview();
       else dialog.close();
+      const forget = setTimeout(() => p.thumb && URL.revokeObjectURL(p.thumb), UNDO_MS);
+      toast(`${p.draft?.product ? `“${p.draft.product}”` : 'Date'} left out.`, {
+        action: 'Undo',
+        ms: UNDO_MS,
+        onAction: () => {
+          clearTimeout(forget);
+          photos.splice(Math.min(i, photos.length), 0, p);
+          render();
+          openReview();
+        },
+      });
     }
   });
   dialog.addEventListener('submit', (e) => {
@@ -281,16 +305,33 @@ async function changeEntry(id, changes) {
 
 const deleteEntry = (id) => deleteEntries([id]);
 
-async function deleteEntries(ids) {
-  for (const id of ids) {
-    try {
-      await api(`/api/expiry/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      entries = entries.filter((e) => e.id !== id);
-    } catch (e) {
-      loadError = e.message;
-    }
-  }
+// The dates disappear at once, but the server only deletes them after UNDO_MS, so Undo just puts
+// them back. (Leaving the page in those seconds keeps them, which is the safe side.)
+function deleteEntries(ids) {
+  const gone = (entries ?? []).filter((e) => ids.includes(e.id));
+  if (!gone.length) return;
+  entries = entries.filter((e) => !ids.includes(e.id));
   render();
+  const timer = setTimeout(async () => {
+    for (const e of gone) {
+      try {
+        await api(`/api/expiry/${encodeURIComponent(e.id)}`, { method: 'DELETE' });
+      } catch (err) {
+        entries = [...entries, e]; // not deleted: show it again, with the reason
+        loadError = err.message;
+      }
+    }
+    render();
+  }, UNDO_MS);
+  toast(`${gone.length === 1 ? `“${gone[0].product}”` : `${gone.length} dates`} deleted.`, {
+    action: 'Undo',
+    ms: UNDO_MS,
+    onAction: () => {
+      clearTimeout(timer);
+      entries = [...entries, ...gone];
+      render();
+    },
+  });
 }
 
 // .ics with all-day events and a reminder at 18:00 the evening before.
@@ -390,10 +431,16 @@ function photoCard() {
       ${toReview && !busy ? `<button class="btn" data-act="review">Review &amp; save (${toReview})</button>` : ''}
       ${outOfChecks() && !busy
         ? '<a class="btn btn-primary" href="/pricing" data-view-link>Get more checks</a>'
-        : `<button class="btn btn-primary" data-act="check" ${ready && !busy ? '' : 'disabled'}>${busy && !ready ? 'Checking…' : 'Check'}${ready ? ` (${ready})` : ''}</button>`}
+        : `<button class="btn btn-primary" data-act="check" ${ready && !busy ? '' : 'disabled'}>${busy && !ready ? 'Checking…' : checkLabel(ready)}</button>`}
     </div>
+    ${shortOfChecks(ready) ? `<p class="credits-warn">You have ${credits.balance} check${credits.balance === 1 ? '' : 's'} left for ${ready} photos: the rest will wait. Typing a date is free.</p>` : ''}
   </div>`;
 }
+
+// What pressing Check can cost: one check per photo whose date is found.
+const metered = () => Boolean(credits && !credits.owner && !credits.unlimitedUntil);
+const checkLabel = (n) => (!n ? 'Check' : `Check ${n} photo${n === 1 ? '' : 's'}${metered() ? ` · up to ${n} check${n === 1 ? '' : 's'}` : ''}`);
+const shortOfChecks = (n) => metered() && n > 0 && credits.balance > 0 && credits.balance < n;
 
 // Checks left, from the server (null when checks aren't metered, e.g. locally without a database).
 const outOfChecks = () => Boolean(credits && !credits.owner && !credits.unlimitedUntil && credits.balance < 1);
@@ -442,7 +489,12 @@ function calendarCard() {
   for (let d = new Date(start); d <= end || cells.length % 7; d.setDate(d.getDate() + 1)) {
     const key = ymd(d);
     const items = byDay[key] ?? [];
-    cells.push(`<div class="cal-day${d.getMonth() !== month.getMonth() ? ' other' : ''}${key === today() ? ' today' : ''}${items.length ? ' has-items' : ''}"${items.length ? ` data-act="day" data-date="${key}" role="button" tabindex="0" title="${esc(items.map((e) => `${e.product}${e.location ? ` (${e.location})` : ''}`).join('\n'))}"` : ''}>
+    // A day with dates opens them; an empty day opens "Enter manually" on that date (mouse/touch
+    // only, so keyboard users don't tab through 35 days: they have the Enter manually button).
+    const open = items.length
+      ? ` data-act="day" data-date="${key}" role="button" tabindex="0" title="${esc(items.map((e) => `${e.product}${e.location ? ` (${e.location})` : ''}`).join('\n'))}"`
+      : ` data-act="day-add" data-date="${key}" title="Add a date on ${fmtDmy(key)}"`;
+    cells.push(`<div class="cal-day${d.getMonth() !== month.getMonth() ? ' other' : ''}${key === today() ? ' today' : ''}${items.length ? ' has-items' : ''}"${open}>
       <span class="cal-num">${d.getDate()}</span>
       ${items.length ? `<span class="cal-dots">${items.slice(0, 4).map((e) => `<span class="chip">${esc(e.product)}</span>`).join('')}</span>` : ''}
     </div>`);
@@ -523,6 +575,7 @@ export function mountFollow(section) {
     } else if (act === 'check') checkAll();
     else if (act === 'review') openReview();
     else if (act === 'day') openDay(el.dataset.date);
+    else if (act === 'day-add') addManual(el.dataset.date);
     else if (act === 'retry') check(photos.find((p) => p.id === id));
     else if (act === 'delete') deleteEntry(id);
     else if (act === 'clear-past') deleteEntries(entries.filter((x) => daysUntil(x.date) < 0).map((x) => x.id));

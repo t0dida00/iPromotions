@@ -148,6 +148,9 @@ export function crawlAll(log = console.log, trigger = 'cli', only = null) {
     const sectionTimes = { ...(prev.segments ?? {}) };
     let total = 0;
     for (const seg of segments) {
+      // Every store of this section failed: its deals are the old ones, so leave the file and its
+      // "updated" time alone (the page would otherwise say "updated just now" about stale deals).
+      if (!keys.some((k) => segmentOf(k) === seg && sources[k]?.ok)) continue;
       const deals = crawlableStores()
         .filter((k) => segmentOf(k) === seg)
         .flatMap((k) => results[k] ?? previous(k));
