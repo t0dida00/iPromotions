@@ -356,9 +356,9 @@ function photoCard() {
     <div class="follow-head">
       <div><h2>Add products</h2><p class="hint">Photograph the label so the date is sharp and readable, or enter the date yourself. Packing dates are ignored.</p></div>
       <div class="follow-pick">
-        <button class="btn" data-act="manual-add">Enter manually</button>
         <label class="btn"><input type="file" accept="image/*" capture="environment" data-act="files" hidden />Take photo</label>
         <label class="btn"><input type="file" accept="image/*" multiple data-act="files" hidden />Choose photos</label>
+        <button class="btn follow-manual" data-act="manual-add">Enter manually</button>
       </div>
     </div>
     ${tray.length ? `<ul class="tray">${tray.map(photoItem).join('')}</ul>` : '<p class="tray-empty">No photos yet.</p>'}

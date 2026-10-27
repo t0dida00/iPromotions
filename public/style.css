@@ -327,8 +327,9 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .follow-login { max-width: 560px; }
 .follow-head, .cal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .cal-head { align-items: center; margin-bottom: 12px; }
-.follow-pick { display: flex; gap: 8px; }
-.follow-pick .btn { cursor: pointer; }
+.follow-pick { display: grid; grid-template-columns: repeat(2, auto); gap: 8px; }
+.follow-pick .btn { cursor: pointer; text-align: center; white-space: nowrap; }
+.follow-pick .follow-manual { grid-column: 1 / -1; } /* below Take photo / Choose photos */
 .follow-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .tray-empty { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
 
@@ -391,10 +392,13 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .up-tools input { font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
 
 @media (max-width: 760px) {
-  .follow-pick { width: 100%; }
-  .follow-pick .btn { flex: 1; text-align: center; }
+  .follow-pick { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cal-day { min-height: 54px; }
-  .cal-day .chip { font-size: 0; height: 6px; padding: 0; } /* phones: a coloured dot per product */
+  /* phones: a coloured dot per product (font-size 0 left the chip 0 px wide, so give it a size) */
+  .cal-dots { justify-content: flex-start; gap: 3px; }
+  .cal-day .chip { flex: none; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
+  .cal-day .chip.use_by { background: #9b1f3d; }
+  .cal-day .chip.best_before { background: #d99a1e; }
   .cal-day .chip.more { display: none; }
   .upcoming li { grid-template-columns: 1fr; gap: 6px; }
 }
@@ -595,3 +599,8 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 @keyframes s3-in { from { opacity: 0; } }
 @media (max-width: 760px) { .s3-wrap { grid-template-columns: 1fr; } .s3-side { order: 2; height: 220px; } .s3-canvas { height: 250px; } .s3-bubble { max-width: 62%; font-size: 11px; } .s3-tour { top: 8px; right: 8px; } }
 @media (prefers-reduced-motion: reduce) { .s3-bubble, .s3-feed-item { animation: none; } }
+
+/* iOS Safari zooms the page when a field under 16px gets focus, so touch screens get 16px fields. */
+@media (max-width: 760px), (pointer: coarse) {
+  input, select, textarea { font-size: 16px !important; }
+}
