@@ -1,6 +1,7 @@
 // Dashboard section: crawler ("service") health, refresh times and run history from /api/status.
 import { friendlyError, describeCron } from './friendly.js';
 import { idToken } from './auth.js';
+import { showStore3d, hideStore3d, updateStore3d } from './store3d.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
@@ -49,6 +50,7 @@ document.getElementById('dash').addEventListener('click', (e) => {
 
 export function showDashboard() {
   clearTimeout(timer);
+  showStore3d();
   refresh();
 }
 
@@ -60,6 +62,7 @@ document.addEventListener('ipromotion:account', () => {
 export function hideDashboard() {
   clearTimeout(timer);
   timer = null;
+  hideStore3d();
 }
 
 async function refresh() {
@@ -79,6 +82,7 @@ async function refresh() {
 
 function render(s) {
   last = s;
+  updateStore3d(s); // the 3D store's robot reacts to refreshes
   const crawlable = s.stores.filter((x) => x.hasDeals);
   const healthy = crawlable.filter((x) => x.status?.ok).length;
   const failing = crawlable.filter((x) => x.status && !x.status.ok);
@@ -92,9 +96,9 @@ function render(s) {
           : 'starting'
       } · ${c.done.length}/${(c.scope ?? crawlable).length} done · started ${relative(c.startedAt)}</span></div>`
     : failing.length
-      ? `<div class="dash-banner bad">${failing.length} service${failing.length > 1 ? 's' : ''} failed on the last refresh: ${failing
+      ? `<div class="dash-banner bad"><span>${failing.length} service${failing.length > 1 ? 's' : ''} failed on the last refresh: ${failing
           .map((x) => esc(x.name))
-          .join(', ')}. Their previous deals are still shown.${owner ? '' : ' If this keeps happening, please <a href="/contact" data-view-link>contact the admin</a>.'}</div>`
+          .join(', ')}. Their previous deals are still shown.${owner ? '' : ' If this keeps happening, please <a href="/contact" data-view-link>contact the admin</a>.'}</span></div>`
       : '';
 
   const tiles = [

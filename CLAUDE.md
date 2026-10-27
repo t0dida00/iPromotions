@@ -154,7 +154,16 @@ se guardan en localStorage por sección sin sesión, y en la cuenta con sesión 
 `app.js`; se fusionan una vez por inicio de sesión vía `ipromotion:account` de `auth.js`); `/favorites` (`FavoritesView` en `app.js`) junta los deals de
 las categorías favoritas de todas las secciones, leyendo los `PromoView`. En escritorio la barra lateral se
 pliega a una columna de iconos (`.app.sidebar-collapsed`, guardado en localStorage y restaurado por un
-`<script>` en línea antes de pintar); en móvil sigue siendo el cajón deslizante. `dashboard.js` pinta `/api/status`.
+`<script>` en línea antes de pintar); en móvil sigue siendo el cajón deslizante. `dashboard.js` pinta `/api/status`. Encima de las tarjetas, `store3d.js` dibuja con three.js (CDN jsdelivr fijado en el
+import map de `index.html`, cargado solo al abrir el dashboard) un pueblo: cuadrícula de calles
+(`STREET_X`/`STREET_Z`, grafo de cruces), una manzana por sección con sus tiendas (escaparates con sus
+mejores ofertas reales de `GET /api/stores/top`, lámpara verde/ámbar según el último crawl), la HQ y un
+parking con 4 coches. Hay un robot procedural por sección: en un Refresh (`updateStore3d(status)` en cada
+sondeo) conduce por la ruta más corta (Dijkstra, carril derecho, gira en los cruces) a la tienda que se
+está crawleando, aparca, va a pie a la puerta y escanea; al terminar vuelve al parking y celebra o se
+desanima. "Find all discounts" repite el recorrido sin crawlear; pulsar una tienda manda a su robot.
+Las acciones de cada robot son una cola (`board`/`drive`/`alight`/`walk`/`pose`/`hold`/`call`). Sin
+WebGL o sin CDN se oculta.
 Logo en `public/logo.svg`; el favicon (`favicon.svg`) es el mismo dibujo con la etiqueta más grande, y
 `favicon-32.png` / `apple-touch-icon.png` son copias PNG renderizadas de él (regenerarlas si cambia).
 

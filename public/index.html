@@ -91,6 +91,8 @@
           </div>
           <button class="btn crawl-btn">Refresh all</button>
         </header>
+        <!-- 3D K-Supermarket with a robot that shows the deals and works during a refresh (public/store3d.js). -->
+        <div class="wrap store3d" id="store3d"></div>
         <!-- Signed-in user's next expiry dates (public/expiry.js renderDashUpcoming). -->
         <div class="wrap dash-upcoming" id="dash-upcoming" hidden></div>
         <div class="wrap dash" id="dash">
@@ -415,6 +417,15 @@
     </div>
   </template>
 
+  <!-- three.js for the dashboard's 3D store (public/store3d.js), loaded only when the dashboard opens. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
   <script src="/app.js" type="module"></script>
 </body>
 </html>

@@ -15,6 +15,7 @@ import { woltOffers, cachedOffers } from './wolt.js';
 import { getCredits, reserve, settle } from './credits.js';
 import { guard } from './chatGuard.js';
 import { plan, answer, cachedAnswer, offTopicReply, chatEnabled } from './chat.js';
+import { storeOverview } from './dealIndex.js';
 import { getHistory, appendExchange, clearHistory, resetContext, recentQuestions, isClearCommand, isNewSearchCommand } from './chatHistory.js';
 import { billingRouter, stripeWebhook, paymentsEnabled } from './billing.js';
 
@@ -126,6 +127,19 @@ app.get('/api/deals', async (req, res) => {
   res.setHeader('ETag', etag);
   if (req.get('if-none-match') === etag) return res.status(304).end();
   res.type('json').send(raw.body);
+});
+
+// Every store's best deals for the dashboard's 3D town (public/store3d.js): up to 6 per store,
+// spread over groups, from the assistant's in-memory index, so the page doesn't download sections.
+app.get('/api/stores/top', async (req, res) => {
+  const limit = Math.min(6, Math.max(1, Number(req.query.limit) || 3));
+  const stores = {};
+  for (const key of crawlableStores()) {
+    const { store, total, avgDiscount, items } = await storeOverview(key, limit);
+    stores[key] = { store, total, avgDiscount, items };
+  }
+  revalidate(res);
+  res.json({ stores });
 });
 
 // Everything the dashboard shows; read from status.json only, no deal files.
