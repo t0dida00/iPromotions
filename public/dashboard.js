@@ -1,7 +1,7 @@
 // Dashboard section: crawler ("service") health, refresh times and run history from /api/status.
 import { friendlyError, describeCron } from './friendly.js';
 import { idToken } from './auth.js';
-import { showStore3d, hideStore3d, updateStore3d } from './store3d.js';
+import { showStore3d, hideStore3d, updateStore3d, tourStatus } from './store3d.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
@@ -54,6 +54,9 @@ export function showDashboard() {
   refresh();
 }
 
+// "Find all discounts" in the 3D town: redraw so the banner and status pills follow the robots.
+document.addEventListener('ipromotion:tour', () => last && render(last));
+
 // Signing in or out changes what /api/status includes (error details for the owner): reload if shown.
 document.addEventListener('ipromotion:account', () => {
   if (timer !== null) (clearTimeout(timer), refresh());
@@ -86,10 +89,19 @@ function render(s) {
   const crawlable = s.stores.filter((x) => x.hasDeals);
   const healthy = crawlable.filter((x) => x.status?.ok).length;
   const failing = crawlable.filter((x) => x.status && !x.status.ok);
-  const owner = failing.some((x) => x.status.error != null); // only the owner receives error details
+  // The owner (auth.js sets html.is-owner; only the owner receives error details) always sees the
+  // real crawler status; visitors see the 3D town's "Find all discounts" tour as it runs.
+  const owner = document.documentElement.classList.contains('is-owner') || failing.some((x) => x.status.error != null);
   const c = s.crawling;
+  // "Find all discounts" (3D town) shows like a refresh for visitors: which robot is where, stores checked.
+  const tour = !c && !owner && tourStatus().active ? tourStatus() : null;
+  const TOUR_STATE = { way: 'is on the way to', check: 'is checking' };
 
-  const banner = c
+  const banner = tour
+    ? `<div class="dash-banner running"><span class="pulse"></span><span>Finding all discounts: ${
+        [...tour.bots.values()].map((x) => `${esc(x.bot)} ${TOUR_STATE[x.state]} <b>${esc(x.store)}</b>`).join(', ') || 'robots heading home'
+      } · ${[...tour.stores.values()].filter((v) => v === 'done').length}/${crawlable.length} stores checked · started ${relative(tour.startedAt)}</span></div>`
+    : c
     ? `<div class="dash-banner running"><span class="pulse"></span><span>Refreshing now: ${
         c.running.length
           ? `crawling <b>${c.running.map((k) => esc(s.stores.find((x) => x.key === k)?.name ?? k)).join(', ')}</b>${c.running.length > 1 ? ' in parallel' : ''}`
@@ -119,6 +131,10 @@ function render(s) {
 
   const statusPill = (x) => {
     if (!x.hasDeals) return '<span class="pill muted">Brochure only</span>';
+    if (tour) {
+      const st = tour.stores.get(x.key);
+      return st === 'check' ? '<span class="pill run">Checking…</span>' : st === 'way' ? '<span class="pill run">On the way…</span>' : st === 'done' ? '<span class="pill ok">Checked</span>' : '<span class="pill muted">Waiting…</span>';
+    }
     if (c?.running.includes(x.key)) return '<span class="pill run">Crawling…</span>';
     if (c?.scope?.includes(x.key) && !c.done.includes(x.key)) return '<span class="pill run">Waiting…</span>';
     if (c?.queued?.includes(x.key)) return '<span class="pill run">Queued</span>';

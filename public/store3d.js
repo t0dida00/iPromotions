@@ -120,7 +120,7 @@ function route(from, to) {
 }
 
 let THREE;
-let root, canvasBox, labelEl, tourBtn;
+let root, canvasBox, labelEl, tourBtn, feedEl;
 let renderer, scene, camera, controls, timer, raycaster;
 let started = false;
 let failed = false;
@@ -631,7 +631,30 @@ function say(b, html, seconds = 0) {
   b.bubble.innerHTML = html ? `<span class="s3-who">${esc(b.d.bot)}</span>${html}` : '';
   b.bubble.hidden = !html;
   b.sayUntil = html && seconds ? performance.now() + seconds * 1000 : Infinity;
+  if (html) feed(b, html);
 }
+
+// Activity feed in a column left of the map: every robot's actions, newest sliding in at the bottom and
+// pushing older ones up. The column scrolls through the history. Repeats of a robot's last line are skipped (refresh
+// polls re-send the same "Checking Lidl…").
+const FEED_MAX = 100; // lines kept; the column scrolls
+const FEED_EMPTY = `<p class="s3-feed-empty">Press Find all discounts or Refresh, or click a store, and the bots' actions show up here.</p>`;
+function feed(b, html) {
+  const text = Object.assign(document.createElement('div'), { innerHTML: html }).textContent.replace(/\s+/g, ' ').trim();
+  if (!text || text === b.lastFeed) return;
+  b.lastFeed = text;
+  const item = document.createElement('div');
+  item.className = 's3-feed-item';
+  item.style.setProperty('--bot', hex(b.d.color));
+  item.innerHTML = `<span class="s3-feed-who">${esc(b.d.bot)}<time>${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time></span>${esc(text)}`;
+  // Follow the newest line, unless the reader has scrolled up to older ones.
+  const atBottom = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight < 24;
+  feedEl.querySelector('.s3-feed-empty')?.remove();
+  feedEl.append(item);
+  while (feedEl.children.length > FEED_MAX) feedEl.firstElementChild.remove();
+  if (atBottom) feedEl.scrollTop = feedEl.scrollHeight; // instant: the new line's slide-in is the motion
+}
+const feedLine = (b, text) => ({ type: 'call', fn: () => feed(b, esc(text)) });
 
 const storeName = (key) => shops.get(key)?.name ?? key;
 
@@ -655,6 +678,7 @@ function visit(b, key, then = []) {
   if (!s) return;
   b.queue.push(
     ...boardActions(b),
+    feedLine(b, `Heading to ${s.name}`),
     { type: 'drive', to: s.loc },
     { type: 'alight', at: { x: s.loc.curb.x, z: s.loc.curb.z - 0.6 } }, // on the shop's side
     { type: 'walk', to: () => s.door, face: Math.PI },
@@ -663,7 +687,7 @@ function visit(b, key, then = []) {
 }
 
 function driveHome(b, then = []) {
-  b.queue.push(...boardActions(b), { type: 'drive', to: b.home.loc, park: b.home.spot }, { type: 'alight', at: b.home.stand, face: 0 }, ...then);
+  b.queue.push(...boardActions(b), feedLine(b, 'Heading back to HQ'), { type: 'drive', to: b.home.loc, park: b.home.spot }, { type: 'alight', at: b.home.stand, face: 0 }, ...then);
 }
 
 function reset(b) {
@@ -858,9 +882,22 @@ function introduce(b) {
   );
 }
 
+// Progress of "Find all discounts", shown by dashboard.js like a running refresh: each store is
+// 'way' (its robot is driving there), 'check' (scanning it) or 'done'; stores not listed are waiting.
+const tourState = { active: false, startedAt: null, stores: new Map(), bots: new Map() };
+export const tourStatus = () => tourState;
+const tourChanged = () => document.dispatchEvent(new CustomEvent('ipromotion:tour'));
+function tourMark(b, key, state) {
+  tourState.stores.set(key, state);
+  if (state === 'done') tourState.bots.delete(b.d.segment);
+  else tourState.bots.set(b.d.segment, { bot: b.d.bot, store: storeName(key), state });
+  tourChanged();
+}
+
 // "Find all discounts": every robot visits all its stores, then reports the district's total.
 function tour() {
   if (!bots.length || bots.some((b) => b.busy === 'crawl' || b.busy === 'tour')) return;
+  Object.assign(tourState, { active: true, startedAt: new Date().toISOString(), stores: new Map(), bots: new Map() });
   for (const b of bots) {
     reset(b);
     b.busy = 'tour';
@@ -868,18 +905,29 @@ function tour() {
     for (const key of b.stores) {
       const t = top[key];
       const best = Math.max(0, ...(t?.items ?? []).map((i) => i.discountPct ?? 0));
+      b.queue.push({ type: 'call', fn: () => tourMark(b, key, 'way') });
       visit(b, key, [
+        { type: 'call', fn: () => tourMark(b, key, 'check') },
         { type: 'pose', mode: 'work', ms: 1600, say: `${esc(storeName(key))}: <b>${(t?.total ?? 0).toLocaleString('en-GB')}</b> deals${best ? `, up to -${best}%` : ''}`, sayFor: 3 },
-        { type: 'call', fn: () => (found += t?.total ?? 0) },
+        { type: 'call', fn: () => ((found += t?.total ?? 0), tourMark(b, key, 'done')) },
       ]);
     }
     driveHome(b, [
       { type: 'call', fn: () => say(b, `Found <b>${found.toLocaleString('en-GB')}</b> deals in ${b.stores.length} stores!`, 6) },
       { type: 'pose', mode: 'celebrate', ms: 3000 },
-      { type: 'call', fn: () => ((b.busy = null), (b.mode = 'idle'), updateButton()) },
+      {
+        type: 'call',
+        fn: () => {
+          b.busy = null;
+          b.mode = 'idle';
+          updateButton();
+          if (!bots.some((x) => x.busy === 'tour')) (tourState.active = false), tourChanged(); // last robot home
+        },
+      },
     ]);
   }
   updateButton();
+  tourChanged();
 }
 
 function updateButton() {
@@ -933,6 +981,7 @@ export function updateStore3d(s) {
     const now = b.stores.find((k) => running.has(k));
     const progress = `<br><small>${inScope.length - pending.length} of ${inScope.length} stores done</small>`;
     if (c && pending.length) {
+      if (tourState.active) (tourState.active = false), tourChanged(); // a real refresh takes over
       if (b.busy !== 'crawl') (reset(b), (b.target = null));
       b.busy = 'crawl';
       if (now && b.target !== now) {
@@ -982,15 +1031,15 @@ function resize() {
   if (!width || !height) return;
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
-  // Narrow screens: higher and wider, so the whole grid fits.
-  const narrow = width < 600;
-  camera.fov = narrow ? 52 : 44;
-  if (narrow !== resize.narrow) {
-    resize.narrow = narrow;
-    camera.position.set(0, narrow ? 20 : 11.5, narrow ? 12 : 14.5);
-    controls?.update();
-  }
+  // Back the camera off until the whole town fits this panel's shape; tall panels look more from above.
+  camera.fov = 44;
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const d = Math.max(16.5 / (tanV * camera.aspect), 7.3 / tanV);
+  const dir = camera.aspect < 1.6 ? new THREE.Vector3(0, 20, 12) : new THREE.Vector3(0, 11.5, 14.5);
+  camera.position.copy(controls?.target ?? new THREE.Vector3(0, 0, 0.2)).addScaledVector(dir.normalize(), d);
+  camera.far = d + 40;
   camera.updateProjectionMatrix();
+  controls?.update();
 }
 
 function setRunning() {
@@ -1121,8 +1170,12 @@ export function hideStore3d() {
 // The container sits in index.html above the dashboard tiles: <div id="store3d">.
 root = document.getElementById('store3d');
 if (root) {
-  root.innerHTML = `<div class="s3-canvas"><div class="s3-loading">Opening the stores…</div><button class="btn btn-primary btn-sm s3-tour" disabled>Find all discounts</button></div><p class="s3-label"></p>`;
+  root.innerHTML = `<div class="s3-wrap">
+      <aside class="s3-side"><h3>Bot activity</h3><div class="s3-feed" aria-live="polite" aria-label="What the bots are doing">${FEED_EMPTY}</div></aside>
+      <div class="s3-canvas"><div class="s3-loading">Opening the stores…</div><button class="btn btn-primary btn-sm s3-tour" disabled>Find all discounts</button></div>
+    </div><p class="s3-label"></p>`;
   canvasBox = root.querySelector('.s3-canvas');
+  feedEl = root.querySelector('.s3-feed');
   labelEl = root.querySelector('.s3-label');
   tourBtn = root.querySelector('.s3-tour');
 } else failed = true;
