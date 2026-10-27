@@ -1,6 +1,7 @@
 import config from '../config.js';
 import { readSegment, SEGMENTS } from './store.js';
 import { cachedOffers } from './wolt.js';
+import { isLive } from './validity.js';
 
 // Retrieval for the deals assistant (src/chat.js): every section's deals plus the cached Wolt
 // offers for the default location, in ONE list. Sections are not a boundary: a question about
@@ -105,7 +106,7 @@ async function documents() {
   const def = config.wolt?.defaultLocation;
   const wolt = def ? await cachedOffers(def.lat, def.lon).catch(() => null) : null;
   const now = Date.now();
-  const live = docs.filter((d) => !d.validUntil || Date.parse(d.validUntil) >= now);
+  const live = docs.filter((d) => isLive(d, now));
   return wolt?.venues?.length ? [...live, ...wolt.venues.map(woltDoc).map(withText)] : live;
 }
 

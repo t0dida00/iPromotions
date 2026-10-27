@@ -30,6 +30,7 @@ let photos = []; // { id, thumb, data, status, result, error }
 let entries = null; // saved dates from the server; null until loaded
 let month = firstOfMonth(new Date());
 let loadError = '';
+let pastOpen = false; // the folded "Past (n)" list, kept open across redraws
 let credits; // { balance, unlimitedUntil, nextFreeAt, owner }; null = not metered; undefined = not loaded
 let dialog = null; // the review dialog (<dialog>), created on mount
 const LAST_LOCATION = 'ipromotion.expiryLocation'; // suggested for new rows, in this browser only
@@ -278,12 +279,16 @@ async function changeEntry(id, changes) {
   render();
 }
 
-async function deleteEntry(id) {
-  try {
-    await api(`/api/expiry/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    entries = entries.filter((e) => e.id !== id);
-  } catch (e) {
-    loadError = e.message;
+const deleteEntry = (id) => deleteEntries([id]);
+
+async function deleteEntries(ids) {
+  for (const id of ids) {
+    try {
+      await api(`/api/expiry/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      entries = entries.filter((e) => e.id !== id);
+    } catch (e) {
+      loadError = e.message;
+    }
   }
   render();
 }
@@ -459,34 +464,45 @@ function calendarCard() {
 function upcomingCard() {
   if (entries === null)
     return `<div class="follow-card"><p class="hint">${loadError ? esc(loadError) : 'Loading your dates…'}</p></div>`;
-  const list = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  // Today onwards first; past dates fold away below (newest first), so the box opens on what's next.
+  const next = sorted.filter((e) => daysUntil(e.date) >= 0);
+  const past = sorted.filter((e) => daysUntil(e.date) < 0).reverse();
   return `<div class="follow-card">
     <div class="cal-head">
       <h2>Upcoming</h2>
-      ${list.length ? '<button class="btn btn-sm" data-act="ics-all">Add all to calendar (.ics)</button>' : ''}
+      ${next.length ? '<button class="btn btn-sm" data-act="ics-all">Add all to calendar (.ics)</button>' : ''}
     </div>
     ${loadError ? `<p class="login-note">${esc(loadError)}</p>` : ''}
-    ${list.length ? `<ul class="upcoming">${list.map((e) => {
-      const n = daysUntil(e.date);
-      return `<li class="${n < 0 ? 'past' : n === 0 ? 'today' : n === 1 ? 'soon' : ''}">
-        <span class="up-when"><b>${relative(e.date)}</b><span>${esc(fmtDmy(e.date))}</span></span>
-        <span class="up-what">
-          <span class="up-line">
-            <input class="up-name" value="${esc(e.product)}" data-act="rename" data-id="${e.id}" aria-label="Product name" maxlength="60" />
-          </span>
-          <label class="up-loc">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
-            <input value="${esc(e.location ?? '')}" data-act="relocate" data-id="${e.id}" placeholder="Add location, e.g. Prisma Linnanmaa" aria-label="Location" maxlength="60" />
-          </label>
-        </span>
-        <span class="up-tools">
-          <input type="date" value="${e.date}" data-act="redate" data-id="${e.id}" aria-label="Change date" />
-          <button class="btn btn-sm" data-act="ics" data-id="${e.id}" title="Add to calendar (.ics)">.ics</button>
-          <button class="btn btn-sm btn-icon" data-act="delete" data-id="${e.id}" aria-label="Delete">×</button>
-        </span>
-      </li>`;
-    }).join('')}</ul>` : '<p class="tray-empty">No dates yet. Add photos above and press <b>Check</b>, or <b>Enter manually</b>.</p>'}
+    ${next.length ? `<ul class="upcoming">${next.map(upcomingRow).join('')}</ul>`
+      : `<p class="tray-empty">${past.length ? 'Nothing coming up.' : 'No dates yet.'} Add photos below and press <b>Check</b>, or <b>Enter manually</b>.</p>`}
+    ${past.length ? `<details class="up-past"${pastOpen ? ' open' : ''}>
+      <summary>Past (${past.length})</summary>
+      <ul class="upcoming">${past.map(upcomingRow).join('')}</ul>
+      <button class="btn btn-sm" data-act="clear-past">Clear past dates</button>
+    </details>` : ''}
   </div>`;
+}
+
+function upcomingRow(e) {
+  const n = daysUntil(e.date);
+  return `<li class="${n < 0 ? 'past' : n === 0 ? 'today' : n === 1 ? 'soon' : ''}">
+    <span class="up-when"><b>${relative(e.date)}</b><span>${esc(fmtDmy(e.date))}</span></span>
+    <span class="up-what">
+      <span class="up-line">
+        <input class="up-name" value="${esc(e.product)}" data-act="rename" data-id="${e.id}" aria-label="Product name" maxlength="60" />
+      </span>
+      <label class="up-loc">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+        <input value="${esc(e.location ?? '')}" data-act="relocate" data-id="${e.id}" placeholder="Add location, e.g. Prisma Linnanmaa" aria-label="Location" maxlength="60" />
+      </label>
+    </span>
+    <span class="up-tools">
+      <input type="date" value="${e.date}" data-act="redate" data-id="${e.id}" aria-label="Change date" />
+      <button class="btn btn-sm" data-act="ics" data-id="${e.id}" title="Add to calendar (.ics)">.ics</button>
+      <button class="btn btn-sm btn-icon" data-act="delete" data-id="${e.id}" aria-label="Delete">×</button>
+    </span>
+  </li>`;
 }
 
 // ── Wiring ───────────────────────────────────────────────────────────────────────────────────
@@ -509,6 +525,7 @@ export function mountFollow(section) {
     else if (act === 'day') openDay(el.dataset.date);
     else if (act === 'retry') check(photos.find((p) => p.id === id));
     else if (act === 'delete') deleteEntry(id);
+    else if (act === 'clear-past') deleteEntries(entries.filter((x) => daysUntil(x.date) < 0).map((x) => x.id));
     else if (act === 'ics') downloadIcs(entries.filter((x) => x.id === id), 'expiry-date.ics');
     else if (act === 'ics-all') downloadIcs(entries.filter((x) => daysUntil(x.date) >= 0), 'expiry-dates.ics');
     else if (act === 'today') {
@@ -519,6 +536,7 @@ export function mountFollow(section) {
       render();
     }
   });
+  root.addEventListener('toggle', (e) => e.target.matches?.('.up-past') && (pastOpen = e.target.open), true);
   root.addEventListener('keydown', (e) => {
     const el = e.target.closest('[data-act="day"]');
     if (el && (e.key === 'Enter' || e.key === ' ')) (e.preventDefault(), openDay(el.dataset.date));

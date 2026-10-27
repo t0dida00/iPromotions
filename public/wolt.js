@@ -48,11 +48,19 @@ async function load(useLocation = false) {
   if (useLocation && !pos) state.note = "Couldn't get your location, so these are the offers in Oulu.";
   state.status = 'loading';
   render();
-  let res = await fetch(pos ? `/api/wolt?lat=${pos.lat}&lon=${pos.lon}` : '/api/wolt');
-  // Outside Finland: fall back to the default location.
-  if (res.status === 400 && pos) {
-    state.note = 'Wolt offers here are for Finland only, so these are the offers in Oulu.';
-    res = await fetch('/api/wolt');
+  let res;
+  try {
+    res = await fetch(pos ? `/api/wolt?lat=${pos.lat}&lon=${pos.lon}` : '/api/wolt');
+    // Outside Finland: fall back to the default location.
+    if (res.status === 400 && pos) {
+      state.note = 'Wolt offers here are for Finland only, so these are the offers in Oulu.';
+      res = await fetch('/api/wolt');
+    }
+  } catch {
+    // Offline or the request never reached us: same error state, with "Try again".
+    state.status = 'error';
+    state.message = navigator.onLine === false ? "You're offline. Connect and press Try again." : "Couldn't reach the server. Press Try again.";
+    return render();
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -153,12 +161,17 @@ export function mountWolt(section) {
     // "Try again" repeats the failed lookup (Oulu or near you); "Update location" asks where the visitor is.
     if (e.target.closest('[data-wolt-locate]')) load(state.status === 'error' ? state.nearMe : true);
   });
+  // Filtering waits until typing pauses (200 ms); what's typed is kept at once.
+  let typing;
   root.addEventListener('input', (e) => {
     if (e.target.id !== 'wolt-q') return;
     state.rawQ = e.target.value;
-    state.q = fold(e.target.value.trim());
-    state.shown = PAGE;
-    render();
+    clearTimeout(typing);
+    typing = setTimeout(() => {
+      state.q = fold(state.rawQ.trim());
+      state.shown = PAGE;
+      render();
+    }, 200);
   });
   render();
 }

@@ -15,6 +15,11 @@ const FAV_PREVIEW = 20; // deals per section on the Favorites page; the rest are
 const views = []; // one PromoView per promotions section
 
 const $ = (id) => document.getElementById(id);
+// Waits until typing pauses, so a section of 5,000 deals isn't filtered again on every key.
+const debounce = (fn, ms = 200) => {
+  let t;
+  return (...args) => (clearTimeout(t), (t = setTimeout(() => fn(...args), ms)));
+};
 const eur = (n) => (n == null ? '' : '€' + n.toFixed(2));
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 // Links and images come from scraped sites: only http(s) URLs (or our own /paths), never javascript:.
@@ -121,15 +126,25 @@ class PromoView {
     if (this.list && this.version === latest) return Promise.resolve();
     this.loading ??= (async () => {
       if (!this.list) this.el('count').textContent = 'Loading deals…';
-      const res = await fetch(`/api/deals?segment=${this.segment}`);
-      if (res.status === 429) {
-        // Rate-limited: try again when the server says so.
-        const wait = Number(res.headers.get('Retry-After')) || 30;
-        if (!this.list) this.el('count').textContent = `Too many requests — retrying in ${wait}s…`;
-        setTimeout(() => this.ensureLoaded(), wait * 1000);
+      let data;
+      try {
+        const res = await fetch(`/api/deals?segment=${this.segment}`);
+        if (res.status === 429) {
+          // Rate-limited: try again when the server says so.
+          const wait = Number(res.headers.get('Retry-After')) || 30;
+          if (!this.list) this.el('count').textContent = `Too many requests — retrying in ${wait}s…`;
+          setTimeout(() => this.ensureLoaded(), wait * 1000);
+          return;
+        }
+        if (!res.ok) throw new Error(String(res.status));
+        data = await res.json();
+      } catch {
+        // Offline or a server error: keep what's shown (if anything) and offer to try again.
+        if (!this.list)
+          this.el('count').innerHTML = `${navigator.onLine === false ? "You're offline." : "Couldn't load the deals."} <button class="btn btn-sm" data-retry>Retry</button>`;
+        else toast("Couldn't refresh the deals. Showing the ones loaded before.");
         return;
       }
-      const data = await res.json();
       this.list = data.deals ?? [];
       this.version = data.updatedAt ?? latest;
       this.render();
@@ -256,7 +271,8 @@ class PromoView {
       this.reset({ group: b.dataset.group });
       this.root.querySelector('.filters').scrollIntoView();
     });
-    this.el('q').addEventListener('input', (e) => this.reset({ q: e.target.value.trim().toLowerCase() }));
+    this.el('q').addEventListener('input', debounce((e) => this.reset({ q: e.target.value.trim().toLowerCase() })));
+    this.el('count').addEventListener('click', (e) => e.target.closest('[data-retry]') && this.ensureLoaded());
     this.el('sort').addEventListener('change', (e) => this.reset({ sort: e.target.value }));
     // Infinite scroll: render more cards as the bottom comes into view.
     new IntersectionObserver((entries) => {
@@ -341,10 +357,10 @@ class FavoritesView {
   }
 
   bind() {
-    $('fav-q').addEventListener('input', (e) => {
+    $('fav-q').addEventListener('input', debounce((e) => {
       this.state.q = e.target.value.trim().toLowerCase();
       this.render();
-    });
+    }));
     $('fav-sort').addEventListener('change', (e) => {
       this.state.sort = e.target.value;
       this.render();

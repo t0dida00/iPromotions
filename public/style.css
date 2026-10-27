@@ -379,6 +379,10 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .upcoming { list-style: none; max-height: 300px; overflow-y: auto; margin: 0 -10px; padding: 0 10px; }
 .upcoming li { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .upcoming li.past { opacity: 0.55; }
+.up-past { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.up-past summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; padding: 4px 0; }
+.up-past .upcoming { max-height: 220px; }
+.up-past > .btn { margin-top: 8px; }
 .upcoming li.soon .up-when b { color: var(--sale); }
 /* Today = the product's last day, when stores usually discount it: highlight the whole row. */
 .upcoming li.today { margin: 0 -10px; padding: 10px 10px 10px 7px; border-top-color: transparent; border-left: 3px solid var(--accent); border-radius: 10px; background: #e3f1ea; }
@@ -573,6 +577,8 @@ html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display
 .chat-count { grid-column: 1; font-size: 11px; color: var(--muted); }
 @media (max-width: 760px) {
   .chat-fab { right: 16px; bottom: 16px; }
+  /* Room under the last buttons/cards for the 56px chat button (16px from the edge + a gap). */
+  .main > .view:not([hidden]) { padding-bottom: 88px; }
   .chat-panel { inset: 0; width: auto; height: auto; border-radius: 0; border: 0; }
   .chat-open .chat-fab { display: none; }
   .chat-open body { overflow: hidden; }

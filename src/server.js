@@ -1,6 +1,8 @@
 import express from 'express';
 import cron from 'node-cron';
 import path from 'node:path';
+import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import config from '../config.js';
 import { crawlAll, crawlableStores, currentProgress, saveProgress } from './crawl.js';
@@ -18,6 +20,7 @@ import { plan, answer, cachedAnswer, offTopicReply, chatEnabled } from './chat.j
 import { storeOverview } from './dealIndex.js';
 import { getHistory, appendExchange, clearHistory, resetContext, recentQuestions, isClearCommand, isNewSearchCommand } from './chatHistory.js';
 import { billingRouter, stripeWebhook, paymentsEnabled } from './billing.js';
+import { isLive } from './validity.js';
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const startedAt = new Date().toISOString();
@@ -115,18 +118,41 @@ app.get('/api/meta', async (req, res) => {
   });
 });
 
-// One section's deals, loaded only when that section is opened. Sent as the stored file with an
-// ETag, so a browser that already has this version gets a 304 instead of the data again.
+// One section's deals, loaded only when that section is opened. Expired deals are left out and
+// fields the page doesn't use are dropped; the result is built once per stored version and hour
+// (deals end by the hour at most), gzipped, and has an ETag from its content, so a re-crawl that
+// changed nothing still answers 304. Sections are megabytes: gzip keeps them far under Vercel's
+// 4.5 MB response limit.
+const dealsCache = new Map(); // segment → { key, etag, json, gz }
+async function dealsPayload(segment) {
+  const raw = await readRaw(segmentFile(segment)); // file locally, kv row online
+  if (!raw) return null; // section never crawled yet
+  const key = `${raw.mtime.getTime()}:${Math.floor(Date.now() / 3_600_000)}`;
+  const hit = dealsCache.get(segment);
+  if (hit?.key === key) return hit;
+  const data = JSON.parse(raw.body);
+  const now = Date.now();
+  const deals = (data.deals ?? []).filter((d) => isLive(d, now)).map(({ segment: _s, analyzed: _a, ...d }) => d);
+  const json = JSON.stringify({ updatedAt: data.updatedAt ?? null, deals });
+  const etag = `W/"${segment}-${crypto.createHash('sha1').update(json).digest('base64url').slice(0, 16)}"`;
+  const entry = { key, etag, json, gz: zlib.gzipSync(json) };
+  dealsCache.set(segment, entry);
+  return entry;
+}
+
 app.get('/api/deals', async (req, res) => {
   const segment = String(req.query.segment ?? '');
   if (!SEGMENTS.includes(segment)) return res.status(400).json({ error: `segment must be one of: ${SEGMENTS.join(', ')}` });
   revalidate(res);
-  const raw = await readRaw(segmentFile(segment)); // file locally, kv row online
-  if (!raw) return res.json({ updatedAt: null, deals: [] }); // section never crawled yet
-  const etag = `W/"${segment}-${raw.mtime.getTime()}"`;
-  res.setHeader('ETag', etag);
-  if (req.get('if-none-match') === etag) return res.status(304).end();
-  res.type('json').send(raw.body);
+  const p = await dealsPayload(segment);
+  if (!p) return res.json({ updatedAt: null, deals: [] });
+  res.setHeader('ETag', p.etag);
+  res.setHeader('Vary', 'Accept-Encoding');
+  if (req.get('if-none-match') === p.etag) return res.status(304).end();
+  res.type('json');
+  if (!/\bgzip\b/.test(req.get('accept-encoding') ?? '')) return res.send(p.json);
+  res.setHeader('Content-Encoding', 'gzip');
+  res.send(p.gz);
 });
 
 // Every store's best deals for the dashboard's 3D town (public/store3d.js): up to 6 per store,

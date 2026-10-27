@@ -17,6 +17,7 @@ import { crawlGigantti } from './crawlers/gigantti.js';
 import { crawlHesburger } from './crawlers/hesburger.js';
 import { crawlBurgerKing } from './crawlers/burgerking.js';
 import { unifyCategory } from './categories.js';
+import { normalizeValidUntil } from './validity.js';
 
 const CRAWLERS = {
   tokmanni: crawlTokmanni,
@@ -194,6 +195,7 @@ function enrich(d, source, segment = 'groceries') {
     // Use the store/analyst figure when there's no old price to compute it from ("-40 %").
     discountPct: discountPct > 0 ? discountPct : d.discountPct > 0 ? d.discountPct : null,
     group,
+    validUntil: normalizeValidUntil(d.validUntil), // a bare day = the end of that day in Finland
   };
 }
 

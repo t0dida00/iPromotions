@@ -120,7 +120,7 @@ function render() {
           <li>${info.freeChecks} checks to start</li>
           <li>+${info.weeklyChecks} free check every week</li>
           <li>Unused weekly checks add up</li>
-          <li>Calendar, reminders and .ics export</li>
+          <li>Calendar view and .ics export to your phone's calendar</li>
         </ul>
         ${user ? '<a class="btn price-buy" href="/follow" data-view-link>Start checking</a>' : '<button class="btn price-buy" data-login>Log in to start</button>'}
       </article>
