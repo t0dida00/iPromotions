@@ -234,6 +234,7 @@ class PromoView {
       groups.filter((g) => !this.favorites.has(g)).map(catRow).join('');
 
     const list = deals.filter((d) => this.matches(d)).sort(SORTS[st.sort]);
+    this.filtered = list; // kept for infinite scroll, which only appends the next page
     this.renderCount(list.length);
     this.el('empty').hidden = list.length > 0 || !this.version;
     this.el('grid').innerHTML = list.slice(0, st.shown).map(card).join('');
@@ -339,12 +340,16 @@ class PromoView {
       e.target.remove();
     }, true);
     this.el('sort').addEventListener('change', (e) => this.reset({ sort: e.target.value }));
-    // Infinite scroll: render more cards as the bottom comes into view.
+    // Infinite scroll: add the next page of cards as the bottom comes into view (the cards already
+    // shown stay, so images don't reload and the page doesn't jump).
     new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && this.state.remaining > 0 && !this.root.hidden) {
-        this.state.shown += PAGE;
-        this.render();
-      }
+      const st = this.state;
+      if (!entries[0].isIntersecting || st.remaining <= 0 || this.root.hidden || !this.filtered) return;
+      const from = st.shown;
+      st.shown += PAGE;
+      this.el('grid').insertAdjacentHTML('beforeend', this.filtered.slice(from, st.shown).map(card).join(''));
+      st.remaining = this.filtered.length - st.shown;
+      this.renderCount(this.filtered.length);
     }, { rootMargin: '600px' }).observe(this.el('sentinel'));
   }
 }
@@ -638,7 +643,7 @@ function showView() {
   }
   const label = document.querySelector(`.nav-item[data-view="${currentView}"] span`) ?? document.querySelector(`.view[data-view="${currentView}"] h1`);
   document.title = `${label?.textContent.trim()} · iPromotion`;
-  document.querySelector('.app').classList.remove('menu-open');
+  setMenu(false, { restoreFocus: false });
   if (currentView === 'dashboard') showDashboard();
   else hideDashboard();
   if (currentView === foodSection?.dataset.view) showWolt();
@@ -672,6 +677,30 @@ document.addEventListener('click', (e) => {
   document.querySelector('.app').classList.add('data-note-closed');
   store.set('ipromotion.dataNoteClosed', true);
 });
+// Mobile drawer (≤ 1024px): the sidebar slides in over the page. Closed, it's inert, so Tab and
+// screen readers skip it; open, focus moves into it and Esc or the scrim closes it again.
+const sidebar = $('sidebar');
+const narrow = matchMedia('(max-width: 1024px)');
+const menuButtons = [...document.querySelectorAll('.menu-btn')];
+function setMenu(open, { restoreFocus = true } = {}) {
+  const app = document.querySelector('.app');
+  const wasOpen = app.classList.contains('menu-open');
+  app.classList.toggle('menu-open', open);
+  for (const b of menuButtons) b.setAttribute('aria-expanded', String(open));
+  sidebar.inert = narrow.matches && !open;
+  if (open) (sidebar.querySelector('.nav-item[aria-current]') ?? sidebar.querySelector('.nav-item'))?.focus();
+  else if (wasOpen && restoreFocus) document.querySelector('.view:not([hidden]) .menu-btn')?.focus();
+}
+for (const b of menuButtons) {
+  b.setAttribute('aria-controls', 'sidebar');
+  b.addEventListener('click', () => setMenu(true));
+}
+$('scrim').addEventListener('click', () => setMenu(false));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.querySelector('.app').classList.contains('menu-open')) setMenu(false);
+});
+narrow.addEventListener('change', () => setMenu(false, { restoreFocus: false }));
+
 window.addEventListener('popstate', showView);
 showView();
 
@@ -694,10 +723,6 @@ function setCollapsed(collapsed) {
 setCollapsed(app.classList.contains('sidebar-collapsed'));
 $('collapse-btn').addEventListener('click', () => setCollapsed(!app.classList.contains('sidebar-collapsed')));
 
-// Mobile drawer.
-for (const b of document.querySelectorAll('.menu-btn'))
-  b.addEventListener('click', () => document.querySelector('.app').classList.add('menu-open'));
-$('scrim').addEventListener('click', () => document.querySelector('.app').classList.remove('menu-open'));
 
 initAuth();
 load();

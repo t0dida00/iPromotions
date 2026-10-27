@@ -130,6 +130,7 @@ async function ask(text) {
   els.input.value = '';
   renderMessages();
   renderChrome();
+  els.live.textContent = 'Searching the deals…';
   try {
     const token = await idToken();
     if (!token) throw Object.assign(new Error('Please sign in to ask the assistant.'), { status: 401 });
@@ -164,12 +165,18 @@ async function ask(text) {
     busy = false;
     renderMessages();
     renderChrome();
+    // Screen readers hear only the new reply, not the whole conversation redrawn.
+    els.live.textContent = messages.at(-1)?.role === 'user' ? '' : messages.at(-1)?.text ?? '';
     els.input.focus();
   }
 }
 
+const phone = matchMedia('(max-width: 760px)');
+
 function setOpen(open) {
   els.panel.hidden = !open;
+  if (phone.matches) els.panel.setAttribute('aria-modal', 'true');
+  else els.panel.removeAttribute('aria-modal');
   els.fab.setAttribute('aria-expanded', String(open));
   els.fab.innerHTML = open ? ICON_CLOSE : ICON_CHAT;
   document.documentElement.classList.toggle('chat-open', open);
@@ -194,7 +201,8 @@ export function mountChat() {
           <button class="btn btn-icon chat-close" aria-label="Close">${ICON_CLOSE}</button>
         </span>
       </header>
-      <div class="chat-list" aria-live="polite"></div>
+      <div class="chat-list"></div>
+      <p class="visually-hidden chat-live" aria-live="polite"></p>
       <div class="chat-signin" hidden><p>Sign in to ask about deals. Each answered question uses 1 check.</p><button class="btn btn-primary">Sign in</button></div>
       <form class="chat-form">
         <textarea rows="1" maxlength="${MAX}" placeholder="Ask about deals…" aria-label="Your question"></textarea>
@@ -204,7 +212,7 @@ export function mountChat() {
     </section>`;
   document.body.append(root);
   const $ = (s) => root.querySelector(s);
-  els = { clear: $('.chat-clear'), fab: $('.chat-fab'), panel: $('.chat-panel'), list: $('.chat-list'), form: $('.chat-form'), input: $('textarea'), send: $('.chat-send'), count: $('.chat-count'), credits: $('.chat-credits'), signin: $('.chat-signin') };
+  els = { live: $('.chat-live'), clear: $('.chat-clear'), fab: $('.chat-fab'), panel: $('.chat-panel'), list: $('.chat-list'), form: $('.chat-form'), input: $('textarea'), send: $('.chat-send'), count: $('.chat-count'), credits: $('.chat-credits'), signin: $('.chat-signin') };
 
   els.fab.addEventListener('click', () => setOpen(els.panel.hidden));
   $('.chat-close').addEventListener('click', () => (setOpen(false), els.fab.focus()));
@@ -212,6 +220,13 @@ export function mountChat() {
   $('.chat-clear').addEventListener('click', () => !busy && clearConversation());
   root.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !els.panel.hidden) (setOpen(false), els.fab.focus());
+    // On phones the panel covers the whole screen: Tab cycles inside it instead of the hidden page.
+    if (e.key === 'Tab' && !els.panel.hidden && phone.matches) {
+      const items = [...els.panel.querySelectorAll('button, a[href], textarea, input')].filter((x) => !x.disabled && x.offsetParent);
+      const [first, last] = [items[0], items.at(-1)];
+      if (e.shiftKey && document.activeElement === first) (e.preventDefault(), last.focus());
+      else if (!e.shiftKey && document.activeElement === last) (e.preventDefault(), first.focus());
+    }
   });
   els.list.addEventListener('click', (e) => {
     const chip = e.target.closest('[data-q]');
