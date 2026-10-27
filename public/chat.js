@@ -67,7 +67,7 @@ function botContent(d) {
 
 function renderMessages() {
   const intro = `<div class="chat-msg bot"><p>Hi! Ask me about this week's deals in Oulu stores, e.g. a kind of product, a store, or where to find something on sale. English or Finnish.</p>
-    <p class="chat-more">I remember your search, so you can follow up with "in Tokmanni" or "cheaper ones". Type <b>/new</b> to start a new search. Your conversation is kept for 24 hours; type <b>/clear</b> to delete it sooner.</p>
+    <p class="chat-more"> Type <b>/new</b> to start a new search. Your conversation is kept for 24 hours; type <b>/clear</b> to delete it sooner.</p>
     <p class="chat-chips">${EXAMPLES.map((q) => `<button type="button" class="chat-chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</p></div>`;
   const list = messages
     .map((m) =>
