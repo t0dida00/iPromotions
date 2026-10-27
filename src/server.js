@@ -6,13 +6,16 @@ import config from '../config.js';
 import { crawlAll, crawlableStores, currentProgress, saveProgress } from './crawl.js';
 import { readStatus, segmentFile, segmentOf, SEGMENTS, migrateLegacy, readRaw } from './store.js';
 import { rateLimit } from './rateLimit.js';
-import { authRouter, requireOwner, requireUser } from './auth.js';
+import { authRouter, requireOwner, requireUser, isOwner } from './auth.js';
 import { favoritesRouter } from './favorites.js';
 import { initDb, ensureDb, dbEnabled, hit, query } from './db.js';
 import { dispatchCrawl } from './github.js';
 import { scanEnabled, scanLabel, listEntries, entryFrom, addEntry, changeEntry, removeEntry } from './expiry.js';
 import { woltOffers, cachedOffers } from './wolt.js';
 import { getCredits, reserve, settle } from './credits.js';
+import { guard } from './chatGuard.js';
+import { plan, answer, cachedAnswer, offTopicReply, chatEnabled } from './chat.js';
+import { getHistory, appendExchange, clearHistory, resetContext, recentQuestions, isClearCommand, isNewSearchCommand } from './chatHistory.js';
 import { billingRouter, stripeWebhook, paymentsEnabled } from './billing.js';
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -37,6 +40,7 @@ const limits = config.rateLimits ?? {};
 const crawlLimit = rateLimit({ name: 'crawl', shared: true, ...limits.crawl, message: 'Too many refresh requests from this address. Please wait a few minutes.' });
 const scanLimit = rateLimit({ name: 'scan', shared: true, ...limits.scan, message: 'Too many photo checks from this address. Please wait a few minutes.' });
 const checkoutLimit = rateLimit({ name: 'checkout', shared: true, ...limits.checkout, message: 'Too many payment attempts from this address. Please wait a few minutes.' });
+const chatLimit = rateLimit({ name: 'chat', shared: true, ...limits.chat, message: 'Too many questions from this address. Please wait a few minutes.' });
 const woltLimit = rateLimit({ name: 'wolt', shared: true, ...limits.wolt, message: 'Too many Wolt lookups for new locations from this address. Please wait a few minutes.' });
 // For uptime checks: is the database reachable, and when did the last crawl finish? Before the
 // rate limits, so a monitor polling it never gets 429.
@@ -90,12 +94,17 @@ function cooldowns(sources) {
   return out;
 }
 
+// Crawler errors (store URLs, stack-like messages) are for the owner only: everyone else just
+// learns that a store failed (`ok: false`) and is told to contact the admin.
+const publicStatus = (s) => (s && 'error' in s ? { ...s, error: undefined } : s);
+const statusFor = (sources, owner) => (owner ? sources : Object.fromEntries(Object.entries(sources ?? {}).map(([k, s]) => [k, publicStatus(s)])));
+
 // Small, frequently polled: stores, their status, per-section update times and refresh state.
-app.get('/api/meta', async (_req, res) => {
-  const [status, p] = await Promise.all([readStatus(), currentProgress()]);
+app.get('/api/meta', async (req, res) => {
+  const [status, p, owner] = await Promise.all([readStatus(), currentProgress(), isOwner(req)]);
   res.json({
     stores: storeList(),
-    sources: status.sources,
+    sources: statusFor(status.sources, owner),
     segments: status.segments ?? {},
     updatedAt: status.updatedAt,
     crawling: crawlingInfo(p),
@@ -120,8 +129,8 @@ app.get('/api/deals', async (req, res) => {
 });
 
 // Everything the dashboard shows; read from status.json only, no deal files.
-app.get('/api/status', async (_req, res) => {
-  const [{ updatedAt, sources, runs = [] }, p] = await Promise.all([readStatus(), currentProgress()]);
+app.get('/api/status', async (req, res) => {
+  const [{ updatedAt, sources, runs = [] }, p, owner] = await Promise.all([readStatus(), currentProgress(), isOwner(req)]);
   const until = cooldowns(sources);
   res.json({
     server: { startedAt, now: new Date().toISOString(), node: process.version },
@@ -132,7 +141,7 @@ app.get('/api/status', async (_req, res) => {
     stores: storeList().map((s) => ({
       ...s,
       // While a crawl runs, stores that already finished show this run's result.
-      status: p?.sources?.[s.key] || sources[s.key] || null,
+      status: (owner ? (x) => x : publicStatus)(p?.sources?.[s.key] || sources[s.key] || null),
       deals: sources[s.key]?.count ?? 0,
       avgDiscount: sources[s.key]?.avgDiscount ?? null,
       cooldownUntil: until[s.key] ?? null,
@@ -218,16 +227,16 @@ app.get('/api/wolt', async (req, res) => {
 // dates (src/expiry.js). Photos arrive as small JPEG data URLs (shrunk in the browser) and are
 // never stored.
 const json = express.json({ limit: '400kb' });
-const scansToday = new Map(); // uid -> { day, count } without a database; resets at midnight UTC
+const usedToday = new Map(); // "kind:uid" -> { day, count } without a database; resets at midnight UTC
 
-// This user's photo checks today, counting this one. In the database when there is one, so the cap
-// holds across server instances.
-async function countScan(uid) {
+// This user's photo checks (kind 'scan') or assistant questions ('chat') today, counting this one.
+// In the database when there is one, so the cap holds across server instances.
+async function countToday(kind, uid) {
   const day = new Date().toISOString().slice(0, 10);
-  if (dbEnabled()) return (await hit(`scanday:${uid}:${day}`, 86_400_000)).count;
-  const used = scansToday.get(uid);
+  if (dbEnabled()) return (await hit(`${kind}day:${uid}:${day}`, 86_400_000)).count;
+  const used = usedToday.get(`${kind}:${uid}`);
   const count = (used?.day === day ? used.count : 0) + 1;
-  scansToday.set(uid, { day, count });
+  usedToday.set(`${kind}:${uid}`, { day, count });
   return count;
 }
 
@@ -248,7 +257,7 @@ app.post('/api/expiry/scan', requireUser, scanLimit, json, async (req, res) => {
         return res.status(402).json({ error: "You're out of checks. Get more on the pricing page, or wait for your free weekly check.", credits: reservation.credits, pricing: '/pricing' });
     }
     const cap = reservation?.unlimited ? config.credits.unlimitedPerDay : config.expiryScansPerDay;
-    if ((await countScan(req.user.uid)) > cap) {
+    if ((await countToday('scan', req.user.uid)) > cap) {
       if (reservation) await settle(req.user, reservation, false);
       return res.status(429).json({ error: `You have used today's ${cap} photo checks. Try again tomorrow.` });
     }
@@ -259,6 +268,76 @@ app.post('/api/expiry/scan', requireUser, scanLimit, json, async (req, res) => {
     console.error('[expiry]', e.message);
     if (reservation) await settle(req.user, reservation, false).catch((err) => console.error('[credits] refund failed:', err.message));
     res.status(502).json({ error: "We couldn't check this photo right now. Please try again in a moment." });
+  }
+});
+
+// Deals assistant (floating chat; src/chat.js). "/clear" (or "clear the chat"…) deletes the
+// conversation, "/new" forgets the remembered search. Every other question first passes the
+// security check (src/chatGuard.js): a rejected one gets 400 and never reaches the model, costs
+// nothing and isn't saved. The model then reads the question against the conversation's memory (the
+// last search, kept server-side in the history file) and mergeIntent() combines them, so "kana" then
+// "in Tokmanni" searches kana in Tokmanni. A search answered before on the same data comes from the
+// cache, free. Otherwise an answered question costs 1 check, reserved after planning and given back
+// when it found no deals or something failed; off-topic questions are free. Without a database
+// (local) checks aren't metered; the daily cap still applies. Questions are saved in the user's
+// conversation (src/chatHistory.js, deleted 24 hours after it started).
+const chatJson = express.json({ limit: '4kb' });
+app.get('/api/chat/history', requireUser, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(await getHistory(req.user.uid));
+});
+app.delete('/api/chat/history', requireUser, async (req, res) => {
+  await clearHistory(req.user.uid);
+  res.status(204).end();
+});
+app.post('/api/chat', requireUser, chatLimit, chatJson, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const uid = req.user.uid;
+  if (isClearCommand(req.body?.message)) {
+    await clearHistory(uid);
+    return res.json({ cleared: true });
+  }
+  if (isNewSearchCommand(req.body?.message)) {
+    await resetContext(uid);
+    return res.json({ reset: true });
+  }
+  const checked = guard(req.body?.message);
+  if (!checked.ok) return res.status(400).json({ error: checked.error, refused: true });
+  if (!chatEnabled()) return res.status(503).json({ error: 'The assistant is not configured on this server yet.' });
+  if (dbEnabled() && req.user.id == null) return res.status(503).json({ error: "We couldn't reach your account right now. Please try again in a moment." });
+  const cap = config.chat?.perDay ?? 100;
+  if ((await countToday('chat', uid)) > cap) return res.status(429).json({ error: `You have asked today's ${cap} questions. Try again tomorrow.` });
+
+  // The conversation's memory (the last search) lives on the server, in the user's history file;
+  // nothing the browser sends can change it.
+  const history = await getHistory(uid);
+  const save = (reply) => appendExchange(uid, checked.text, reply).catch((e) => console.error('[chat] history:', e.message));
+  let reservation = null;
+  try {
+    const planned = await plan(checked.text, history.context, recentQuestions(history));
+    if (!planned.onTopic) {
+      const reply = offTopicReply(planned.intent.language); // free; the remembered search stays as it was
+      await save(reply);
+      return res.json({ ...reply, credits: null });
+    }
+    const cached = await cachedAnswer(planned.intent).catch((e) => (console.error('[chat] cache:', e.message), { key: null, reply: null }));
+    if (cached.reply) {
+      await save(cached.reply);
+      return res.json({ ...cached.reply, cached: true, credits: null });
+    }
+    if (dbEnabled()) {
+      reservation = await reserve(req.user);
+      if (!reservation.ok)
+        return res.status(402).json({ error: "You're out of checks. Get more on the pricing page, or wait for your free weekly check.", credits: reservation.credits, pricing: '/pricing' });
+    }
+    const result = await answer(checked.text, planned.intent, planned.vocab, cached.key);
+    const credits = reservation ? await settle(req.user, reservation, result.found, 'chat') : null;
+    await save(result);
+    res.json({ ...result, credits });
+  } catch (e) {
+    console.error('[chat]', e.message);
+    if (reservation) await settle(req.user, reservation, false, 'chat').catch((err) => console.error('[credits] refund failed:', err.message));
+    res.status(502).json({ error: "The assistant couldn't answer right now. Please try again in a moment. No check was used." });
   }
 });
 

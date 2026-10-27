@@ -56,11 +56,12 @@ export const reserve = (user) =>
     return { ok: true, charged: true, credits: view(row) };
   });
 
-// After the check: keep the reserved check when a date was found, otherwise give it back.
-export const settle = (user, reservation, found) =>
+// After the check: keep the reserved check when it found something (a date, or deals for an
+// assistant question), otherwise give it back. `reason` is recorded in the ledger.
+export const settle = (user, reservation, found, reason = 'scan') =>
   withTransaction(async (c) => {
     if (reservation.charged && !found) await c.query('update credits set balance = balance + 1 where user_id = $1', [user.id]);
-    else if (reservation.charged) await ledger(c, user.id, -1, 'scan');
+    else if (reservation.charged) await ledger(c, user.id, -1, reason);
     return view(await load(c, user.id), user.role === 'owner');
   });
 

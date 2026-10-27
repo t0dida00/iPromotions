@@ -18,7 +18,8 @@ Node.js (ESM) · Express 5 · Playwright · cheerio · PostgreSQL. No build step
 | **/food** | Hesburger and Burger King campaigns (read by the campaign analyst), live Wolt offers near you, links to McDonald's and Subway |
 | **/favorites** | Deals from every starred (☆) category across sections |
 | **/follow** | *Follow your discount* (signed in): photograph labels and the use-by / best-before dates go on a calendar |
-| **/pricing** | Photo checks for *Follow your discount*: free checks, packs and Unlimited, paid with Stripe |
+| **/pricing** | AI checks (photo checks for *Follow your discount*, deals assistant questions): free checks, packs and Unlimited, paid with Stripe |
+| **Chat (every page)** | *Deals assistant* (signed in): floating button at the bottom-right; ask in English or Finnish ("discounted meat", "what's on sale at Lidl?", "where can I get a discounted burger?") and get matching deals from every store |
 | **/dashboard** | Status of each store's crawler, deal counts, refresh history and the next scheduled run |
 
 Each section has search, store and category filters and sorting. Deals load only when a section is
@@ -169,6 +170,7 @@ src/db.js            Postgres pool, users, favorites, counters
 src/auth.js          Firebase token verification, roles
 src/expiry.js        Follow your discount (vision model, saved dates)
 src/wolt.js          live Wolt offers
+src/chat.js          deals assistant (plan → search → summary), src/chatGuard.js (input check), src/dealIndex.js (search)
 public/              the site (vanilla HTML/CSS/JS)
 api/index.js         Vercel entry
 scripts/             one-off tools (data import)

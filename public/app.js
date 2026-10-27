@@ -4,6 +4,7 @@ import { mountWolt, showWolt } from './wolt.js';
 import { mountFollow, showFollow } from './expiry.js';
 import { mountPricing, showPricing } from './pricing.js';
 import { friendlyError } from './friendly.js';
+import { mountChat } from './chat.js';
 
 // META comes from /api/meta (small): stores from config.js, their status, per-section update
 // times, refresh state and cooldowns. Deals are loaded per section, only when it is opened.
@@ -172,7 +173,9 @@ class PromoView {
       .map((s) => {
         const k = s.key;
         const status = META?.sources?.[k];
-        const warn = status && !status.ok ? `<span class="warn" title="${esc(`Last refresh failed: ${friendlyError(status.error)} Showing its previous deals.`)}">⚠</span>` : '';
+        const warn = status && !status.ok
+          ? `<span class="warn" title="${esc(status.error != null ? `Last refresh failed: ${friendlyError(status.error)} Showing its previous deals.` : "Failed to get this store's latest promotions. Showing its previous deals. If this keeps happening, please contact the admin.")}">⚠</span>`
+          : '';
         const label =
           k === 'all' ? 'All stores'
           : s.logo ? `<img class="tlogo" src="${esc(s.logo)}" alt="${esc(s.name)}" />`
@@ -412,6 +415,7 @@ function useBrowserFavorites() {
 }
 
 document.addEventListener('ipromotion:account', (e) => {
+  load(); // the owner gets crawler error details in /api/meta
   const { signedIn, accounts, uid } = e.detail;
   if (signedIn && accounts) return useAccountFavorites(uid);
   // Signed out: forget the merge marker so stars made while logged out merge at the next sign-in.
@@ -426,7 +430,9 @@ const viewFor = (name) => (name === 'favorites' ? favoritesView : views.find((v)
 
 async function load() {
   clearTimeout(load.timer);
-  const res = await fetch('/api/meta');
+  // Signed in as the owner, the server adds crawler error details to the store statuses.
+  const token = await idToken();
+  const res = await fetch('/api/meta', token ? { headers: { authorization: `Bearer ${token}` } } : {});
   if (res.status === 429) {
     load.timer = setTimeout(load, (Number(res.headers.get('Retry-After')) || 30) * 1000);
     return;
@@ -497,6 +503,8 @@ if (foodSection) mountWolt(foodSection);
 // Follow your discount: product photos → expiry dates on a calendar (public/expiry.js).
 mountFollow(document.querySelector('section[data-view="follow"]'));
 mountPricing(document.querySelector('section[data-view="pricing"]'));
+// Deals assistant: floating chat at the bottom-right of every page (public/chat.js).
+mountChat();
 
 // Refresh buttons: a promotions section refreshes only its own stores; the dashboard's refreshes
 // everything. Also used by the dashboard's per-store and per-section buttons. The server ignores

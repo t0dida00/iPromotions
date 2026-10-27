@@ -71,7 +71,7 @@ create table if not exists credit_ledger (
   id         bigserial primary key,
   user_id    int not null references users(id) on delete cascade,
   delta      int not null,                      -- +n checks, or days for unlimited (reason purchase)
-  reason     text not null,                     -- signup | weekly | purchase | scan | refund
+  reason     text not null,                     -- signup | weekly | purchase | scan | chat | refund
   ref        text,                              -- Stripe session id, plan…
   created_at timestamptz not null default now()
 );

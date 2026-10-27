@@ -26,7 +26,7 @@ node -e "import('./config.js').then(async ({default:c}) => { const {crawlPower} 
 ```
 
 Variables de entorno: `PORT`, `CRON_SCHEDULE`, `FOOD_CRON_SCHEDULE`, `CRAWL_CONCURRENCY`, `REFRESH_COOLDOWN_MINUTES`,
-`DATABASE_URL`, `OWNER_EMAIL`.
+`DATABASE_URL`, `OWNER_EMAIL`, `NUXT_HF_CHAT_MODEL`, `CHAT_QUESTIONS_PER_DAY`.
 
 ## Arquitectura
 
@@ -123,6 +123,26 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   (`public/pricing.js`) con Stripe Checkout (`src/billing.js`, planes en `config.credits.plans`);
   el webhook `POST /api/billing/webhook` (cuerpo raw, antes del rate limit) verifica la firma y el
   importe y concede una vez por sesión (tabla `purchases`).
+- **Deals assistant** (chat flotante abajo a la derecha, `public/chat.js`; `POST /api/chat`, con sesión):
+  1) `src/chatGuard.js` valida la pregunta antes de nada (tamaño ≤ `config.chat.maxChars`, código,
+  HTML, SQL, shell, prompt injection, temas ajenos → 400 gratis, sin modelo); 2) `src/chat.js` `plan`:
+  el modelo de texto (`NUXT_HF_CHAT_MODEL` o `NUXT_HF_MODEL`) devuelve solo lo que dice el mensaje
+  (*delta*: intent, product, topics, stores, keywords EN+FI, `turn` new/refine; `validateDelta` con
+  listas blancas) y `mergeIntent()` (código puro) lo combina con la **memoria**, la búsqueda anterior
+  guardada en el servidor (`history.context`; el navegador no la envía): "kana" → "in Tokmanni" = kana
+  en Tokmanni; 3) caché; 4) `reserve()` 1 check; 5) `src/dealIndex.js` busca en **un solo índice** con
+  todas las secciones + la caché de Wolt de Oulu: los `TOPICS` cruzan secciones (ropa = sección clothing
+  + "Clothing & shoes" de Tokmanni/Prisma), con keywords (producto concreto) cada item debe contener una
+  (al inicio de palabra; ≥ 5 letras también al final de un compuesto), sin keywords (categoría) decide el
+  topic; los resultados se reparten entre tiendas; 6) `summarise` escribe la respuesta solo con esos
+  items (plantilla si falla; sin resultados: "Unfortunately, there is no … in … at the moment."). Las
+  tarjetas salen de nuestros datos, nunca del modelo. Se cobra solo si encuentra deals
+  (`settle(…, 'chat')`); límites `rateLimits.chat` y `config.chat.perDay`.
+  La conversación se guarda por usuario (`src/chatHistory.js`: `chat-<hash uid>.json`, fila de `kv` online) y se
+  borra 24 h después de empezar (`expiresAt`, no se alarga); `/clear` o "clear the chat" (`isClearCommand`)
+  la borra antes (también `DELETE /api/chat/history`); `/new` o "new search" borra solo la memoria
+  (`resetContext`). Caché de respuestas compartida (`chatcache-<hash>.json`, clave = búsqueda ya combinada
+  + `dataVersion()`, 24 h): repetir una búsqueda no gasta check. Las preguntas no van a los logs.
 - Cron (ignora el cooldown): `config.schedule` (semanal) refresca las secciones sin horario propio;
   las de `config.sectionSchedules` tienen el suyo (Food: diario a las 09:00). El dashboard muestra el
   próximo de todos (`nextSchedule()` en `src/server.js`).

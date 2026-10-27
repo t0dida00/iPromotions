@@ -1,4 +1,4 @@
-// /pricing: photo checks for "Follow your discount". Free checks (3 to start, +1 a week), packs
+// /pricing: AI checks — photo checks in "Follow your discount" and deals assistant questions. Free checks (3 to start, +1 a week), packs
 // and a 30-day Unlimited pass, bought through Stripe Checkout (POST /api/billing/checkout →
 // Stripe's page → back to /pricing?paid=…, where we wait for the webhook to add the checks).
 import { idToken, openDialog } from './auth.js';
@@ -102,8 +102,9 @@ function render() {
       ${balanceLine()}
     </div>
     <div class="price-scope">
-      <p><b>What you pay for:</b> only the photo checks in <a href="/follow" data-view-link>Follow your discount</a>.
-        Reading a date from a photo runs a paid AI service each time, and checks cover that cost.</p>
+      <p><b>What you pay for:</b> only the AI features: photo checks in <a href="/follow" data-view-link>Follow your discount</a>
+        and questions to the deals assistant (the chat button at the bottom-right). Each runs a paid AI service, and checks cover that cost.
+        A question uses a check only when it finds deals.</p>
       <p><b>Everything else is free:</b> Market, Cloth, Electronics and Food Promotions, Favorites and the
         Dashboard are collected automatically by our own crawlers, so there's nothing to charge. No checks,
         and no account needed.</p>
@@ -128,8 +129,8 @@ function render() {
     <p class="price-trust">Secure payment by Stripe · Prices include VAT · One-time payments, no subscription</p>
     <div class="price-faq">
       <h2>Questions</h2>
-      <details><summary>Why do photo checks cost money when the rest is free?</summary><p>Deals are collected once by our crawlers and shared with everyone, so showing them costs almost nothing. Reading a date from your photo runs a paid AI model for you each time, so that part uses checks. The free checks each week keep it free for occasional use.</p></details>
-      <details><summary>What counts as a check?</summary><p>One photo where we find a use-by or best-before date. If no date is found, the photo isn't a label, or the check fails, nothing is used.</p></details>
+      <details><summary>Why do AI checks cost money when the rest is free?</summary><p>Deals are collected once by our crawlers and shared with everyone, so showing them costs almost nothing. Reading a date from your photo, or answering your question about deals, runs a paid AI model for you each time, so those use checks. The free checks each week keep it free for occasional use.</p></details>
+      <details><summary>What counts as a check?</summary><p>One photo where we find a use-by or best-before date, or one assistant question that finds deals. If no date is found, the photo isn't a label, the question isn't about deals or finds nothing, or something fails, nothing is used.</p></details>
       <details><summary>Do checks expire?</summary><p>No. Bought checks and saved free checks stay on your account. Unlimited lasts 30 days from purchase; buying it again adds 30 more days.</p></details>
       <details><summary>What does "fair use" mean for Unlimited?</summary><p>Up to ${info.unlimitedPerDay} checks a day, which is far more than a shopping trip needs. It keeps the service affordable for everyone.</p></details>
       <details><summary>Can I get a refund?</summary><p>Checks are added right away, so the 14-day right of withdrawal ends when you buy (you agree to this at checkout). If something went wrong on our side, <a href="/contact" data-view-link>contact us</a> and we'll sort it out.</p></details>

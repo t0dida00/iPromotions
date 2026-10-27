@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import config from '../config.js';
-import { kvGet, kvSet } from './db.js';
+import { kvGet, kvSet, kvDelete, kvPurgeExpired } from './db.js';
 
 // Data lives in small JSON files, one per sidebar section, so a page only downloads the section
 // it shows:
@@ -53,6 +53,24 @@ export async function writeJson(file, data) {
   const tmp = `${file}.${process.pid}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data));
   await fs.rename(tmp, file);
+}
+
+export async function removeJson(file) {
+  if (useDb()) return kvDelete(keyOf(file));
+  await fs.rm(file, { force: true });
+}
+
+// Removes the files named `<prefix>…` whose `expiresAt` has passed (e.g. chat histories).
+export async function purgeExpired(prefix) {
+  if (useDb()) return kvPurgeExpired(prefix);
+  const names = await fs.readdir(DATA_DIR).catch(() => []);
+  let n = 0;
+  for (const name of names.filter((f) => f.startsWith(prefix) && f.endsWith('.json'))) {
+    const file = path.join(DATA_DIR, name);
+    const data = await readJson(file, null);
+    if (!data || !(Date.parse(data.expiresAt) > Date.now())) (await fs.rm(file, { force: true }), n++);
+  }
+  return n;
 }
 
 export const readStatus = () => readJson(STATUS_FILE, { updatedAt: null, sources: {}, runs: [], segments: {} });

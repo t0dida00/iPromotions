@@ -29,6 +29,7 @@ export default {
     wolt: { windowMs: 10 * 60_000, max: 6 }, // Wolt lookups for a new location (each opens Chromium)
     scan: { windowMs: 10 * 60_000, max: 30 }, // expiry-date photo checks (each calls the vision model)
     checkout: { windowMs: 10 * 60_000, max: 10 }, // opening a Stripe payment page
+    chat: { windowMs: 10 * 60_000, max: 20 }, // deals assistant questions (each calls the text model)
   },
 
   // "Follow your discount": photo checks per signed-in user per day (bounds the AI cost).
@@ -46,6 +47,15 @@ export default {
       pack25: { name: '25 checks', checks: 25, cents: 1499 },
       unlimited30: { name: 'Unlimited for 30 days', days: 30, cents: 2499 },
     },
+  },
+
+  // Deals assistant (floating chat, src/chat.js): questions about this week's deals, answered from
+  // the crawled data. An answered question costs 1 check (same balance as photo checks); questions
+  // that are refused or find nothing are free. `perDay` caps one user's questions per day.
+  chat: {
+    maxChars: 300,
+    perDay: Number(process.env.CHAT_QUESTIONS_PER_DAY) || 100,
+    maxItems: 24,
   },
 
   // Wolt offers in Food Promotions are looked up live for the visitor's location (src/wolt.js),

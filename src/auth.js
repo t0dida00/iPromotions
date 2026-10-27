@@ -95,6 +95,13 @@ export async function callerOf(req) {
   }
 }
 
+// Whether the caller is the owner (signed in with the owner role). For routes open to everyone that
+// show the owner a bit more, e.g. crawler error details on /api/status and /api/meta.
+export async function isOwner(req) {
+  const claims = await callerOf(req);
+  return Boolean(claims) && (await userOf(claims)).role === 'owner';
+}
+
 // Route guard: 401 when not signed in; otherwise req.user = { uid, email, name, role, id }.
 export async function requireUser(req, res, next) {
   const claims = await callerOf(req);

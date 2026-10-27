@@ -89,6 +89,21 @@ export async function kvSet(key, value) {
   );
 }
 
+export async function kvDelete(key) {
+  await ensureDb();
+  await pool.query('delete from kv where key = $1', [key]);
+}
+
+// Deletes rows whose key starts with `prefix` and whose value's `expiresAt` has passed.
+export async function kvPurgeExpired(prefix) {
+  await ensureDb();
+  const { rowCount } = await pool.query(
+    `delete from kv where key like $1 and (value->>'expiresAt')::timestamptz < now()`,
+    [`${prefix.replace(/[\\%_]/g, '\\$&')}%`],
+  );
+  return rowCount;
+}
+
 // Saves (or refreshes) the signed-in user from their verified token claims and returns the row.
 // The account whose verified email is OWNER_EMAIL becomes the owner; everyone else is a user.
 export async function upsertUser(claims) {

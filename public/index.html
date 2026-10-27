@@ -177,7 +177,7 @@
           </button>
           <div class="page-title">
             <h1>Pricing</h1>
-            <p class="sub">Photo checks for Follow your discount</p>
+            <p class="sub">AI checks: photo checks and deals assistant questions</p>
           </div>
         </header>
         <div class="wrap pricing" id="pricing"></div>
@@ -209,6 +209,11 @@
               refreshes or photo checks per 10 minutes). Counters for costly actions are kept in our
               database for the length of that window and then deleted. Our hosting provider also keeps
               short-lived technical logs.</li>
+            <li><b>Deals assistant (signed in):</b> your question is checked on our server and sent to an AI model
+              on Hugging Face to search this week's deals and write the answer. Your conversation is saved on our
+              server so you can come back to it, and deleted 24 hours after it started; type /clear in the chat to
+              delete it sooner. Answers (without your name or account) are cached for up to 24 hours so the same
+              question is answered faster. Questions are not written to our logs; we count how many you ask per day.</li>
             <li><b>Location (Food section, optional):</b> Wolt offers are shown for Oulu by default. Only if you
               press "Update location" and allow it, your browser's location is
               rounded to about 1 km and sent to our server to look up Wolt offers near you. The offers are

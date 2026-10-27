@@ -1,5 +1,6 @@
 // Dashboard section: crawler ("service") health, refresh times and run history from /api/status.
 import { friendlyError, describeCron } from './friendly.js';
+import { idToken } from './auth.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
@@ -51,6 +52,11 @@ export function showDashboard() {
   refresh();
 }
 
+// Signing in or out changes what /api/status includes (error details for the owner): reload if shown.
+document.addEventListener('ipromotion:account', () => {
+  if (timer !== null) (clearTimeout(timer), refresh());
+});
+
 export function hideDashboard() {
   clearTimeout(timer);
   timer = null;
@@ -58,7 +64,9 @@ export function hideDashboard() {
 
 async function refresh() {
   try {
-    const res = await fetch('/api/status');
+    // Signed in as the owner, the server adds the crawler error details.
+    const token = await idToken();
+    const res = await fetch('/api/status', token ? { headers: { authorization: `Bearer ${token}` } } : {});
     if (res.status === 429) {
       timer = setTimeout(refresh, (Number(res.headers.get('Retry-After')) || 30) * 1000);
       return;
@@ -74,6 +82,7 @@ function render(s) {
   const crawlable = s.stores.filter((x) => x.hasDeals);
   const healthy = crawlable.filter((x) => x.status?.ok).length;
   const failing = crawlable.filter((x) => x.status && !x.status.ok);
+  const owner = failing.some((x) => x.status.error != null); // only the owner receives error details
   const c = s.crawling;
 
   const banner = c
@@ -85,7 +94,7 @@ function render(s) {
     : failing.length
       ? `<div class="dash-banner bad">${failing.length} service${failing.length > 1 ? 's' : ''} failed on the last refresh: ${failing
           .map((x) => esc(x.name))
-          .join(', ')}. Their previous deals are still shown.</div>`
+          .join(', ')}. Their previous deals are still shown.${owner ? '' : ' If this keeps happening, please <a href="/contact" data-view-link>contact the admin</a>.'}</div>`
       : '';
 
   const tiles = [
@@ -96,9 +105,13 @@ function render(s) {
     ['Server uptime', uptime(s.server.startedAt), `since ${fmtDate(s.server.startedAt)}`],
   ];
 
-  // A failed store: what went wrong in plain words, and the raw error for owners only.
-  const errorNote = (raw) => `<div class="err">${esc(friendlyError(raw))} Its previous deals are still shown, and it will be tried again on the next refresh.</div>
-    <details class="err-details"><summary>Technical details</summary><code>${esc(raw)}</code></details>`;
+  // A failed store. The owner gets what went wrong in plain words plus the raw error; the server
+  // sends the error only to the owner, so everyone else gets a short note and a contact link.
+  const errorNote = (raw) =>
+    owner
+      ? `<div class="err">${esc(friendlyError(raw))} Its previous deals are still shown, and it will be tried again on the next refresh.</div>
+    <details class="err-details"><summary>Technical details</summary><code>${esc(raw)}</code></details>`
+      : `<div class="err">Failed to get this store's promotions. Its previous deals are still shown. If this keeps happening, please <a href="/contact" data-view-link>contact the admin</a>.</div>`;
 
   const statusPill = (x) => {
     if (!x.hasDeals) return '<span class="pill muted">Brochure only</span>';
