@@ -3,10 +3,11 @@ import cron from 'node-cron';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import config from '../config.js';
 import { crawlAll, crawlableStores, currentProgress, saveProgress } from './crawl.js';
-import { readStatus, segmentFile, segmentOf, SEGMENTS, migrateLegacy, readRaw } from './store.js';
+import { readStatus, segmentFile, segmentOf, SEGMENTS, migrateLegacy, readRaw, readVersion } from './store.js';
 import { rateLimit } from './rateLimit.js';
 import { authRouter, requireOwner, requireUser, isOwner } from './auth.js';
 import { favoritesRouter } from './favorites.js';
@@ -70,6 +71,22 @@ app.use(favoritesRouter);
 app.use('/api/billing/checkout', checkoutLimit);
 app.use(billingRouter);
 
+// One read shared by every request arriving within `ms` (and while it's in flight), so a burst of
+// visitors costs one file or database read instead of one each. Errors aren't kept.
+function shared(fn, ms) {
+  let at = 0;
+  let p = null;
+  return () => {
+    if (p && Date.now() - at < ms) return p;
+    at = Date.now();
+    return (p = fn().catch((e) => ((p = null), Promise.reject(e))));
+  };
+}
+// Status and crawl progress for the pages that every tab polls (not for starting a crawl, which
+// reads them fresh).
+const sharedStatus = shared(readStatus, 2000);
+const sharedProgress = shared(currentProgress, 2000);
+
 const storeList = () =>
   Object.entries(config.sources)
     .filter(([, s]) => s.enabled)
@@ -105,7 +122,11 @@ const statusFor = (sources, owner) => (owner ? sources : Object.fromEntries(Obje
 
 // Small, frequently polled: stores, their status, per-section update times and refresh state.
 app.get('/api/meta', async (req, res) => {
-  const [status, p, owner] = await Promise.all([readStatus(), currentProgress(), isOwner(req)]);
+  const [status, p, owner] = await Promise.all([sharedStatus(), sharedProgress(), isOwner(req)]);
+  // Every open tab polls this (every minute, every 3 s during a refresh). Visitors without a sign-in
+  // all get the same answer, so the CDN may reuse it for 5 s; the owner's (with crawler errors) is
+  // never cached.
+  if (!owner) res.setHeader('Vercel-CDN-Cache-Control', 'max-age=5, stale-while-revalidate=30');
   res.json({
     stores: storeList(),
     sources: statusFor(status.sources, owner),
@@ -123,21 +144,37 @@ app.get('/api/meta', async (req, res) => {
 // (deals end by the hour at most), gzipped, and has an ETag from its content, so a re-crawl that
 // changed nothing still answers 304. Sections are megabytes: gzip keeps them far under Vercel's
 // 4.5 MB response limit.
+// Under load only a cheap version check runs (file time / the row's updated_at, shared by every
+// request within 5 s); the section itself is read and built once per change, however many
+// visitors ask at the same moment.
 const dealsCache = new Map(); // segment → { key, etag, json, gz }
+const dealsBuilding = new Map(); // segment → { key, promise } while a new version is being built
+const dealsVersion = Object.fromEntries(SEGMENTS.map((s) => [s, shared(() => readVersion(segmentFile(s)), 5000)]));
+const gzip = promisify(zlib.gzip);
+const hourKey = (mtime) => `${new Date(mtime).getTime()}:${Math.floor(Date.now() / 3_600_000)}`;
+
 async function dealsPayload(segment) {
-  const raw = await readRaw(segmentFile(segment)); // file locally, kv row online
-  if (!raw) return null; // section never crawled yet
-  const key = `${raw.mtime.getTime()}:${Math.floor(Date.now() / 3_600_000)}`;
+  const version = await dealsVersion[segment]();
+  if (!version) return null; // section never crawled yet
+  const key = hourKey(version);
   const hit = dealsCache.get(segment);
   if (hit?.key === key) return hit;
-  const data = JSON.parse(raw.body);
-  const now = Date.now();
-  const deals = (data.deals ?? []).filter((d) => isLive(d, now)).map(({ segment: _s, analyzed: _a, ...d }) => d);
-  const json = JSON.stringify({ updatedAt: data.updatedAt ?? null, deals });
-  const etag = `W/"${segment}-${crypto.createHash('sha1').update(json).digest('base64url').slice(0, 16)}"`;
-  const entry = { key, etag, json, gz: zlib.gzipSync(json) };
-  dealsCache.set(segment, entry);
-  return entry;
+  const building = dealsBuilding.get(segment);
+  if (building?.key === key) return building.promise;
+  const promise = (async () => {
+    const raw = await readRaw(segmentFile(segment)); // file locally, kv row online
+    if (!raw) return null;
+    const data = JSON.parse(raw.body);
+    const now = Date.now();
+    const deals = (data.deals ?? []).filter((d) => isLive(d, now)).map(({ segment: _s, analyzed: _a, ...d }) => d);
+    const json = JSON.stringify({ updatedAt: data.updatedAt ?? null, deals });
+    const etag = `W/"${segment}-${crypto.createHash('sha1').update(json).digest('base64url').slice(0, 16)}"`;
+    const entry = { key: hourKey(raw.mtime), etag, json, gz: await gzip(json) }; // off the main thread
+    dealsCache.set(segment, entry);
+    return entry;
+  })().finally(() => dealsBuilding.delete(segment));
+  dealsBuilding.set(segment, { key, promise });
+  return promise;
 }
 
 app.get('/api/deals', async (req, res) => {
@@ -146,6 +183,10 @@ app.get('/api/deals', async (req, res) => {
   revalidate(res);
   const p = await dealsPayload(segment);
   if (!p) return res.json({ updatedAt: null, deals: [] });
+  // Vercel's CDN keeps the section for a minute (and serves it stale for 10 more while it fetches a
+  // new copy), so a crowd opening the page at once is answered at the edge, not by our functions.
+  // Browsers still revalidate every time (Cache-Control: no-cache) and get 304s.
+  res.setHeader('Vercel-CDN-Cache-Control', 'max-age=60, stale-while-revalidate=600');
   res.setHeader('ETag', p.etag);
   res.setHeader('Vary', 'Accept-Encoding');
   if (req.get('if-none-match') === p.etag) return res.status(304).end();
@@ -157,20 +198,26 @@ app.get('/api/deals', async (req, res) => {
 
 // Every store's best deals for the dashboard's 3D town (public/store3d.js): up to 6 per store,
 // spread over groups, from the assistant's in-memory index, so the page doesn't download sections.
-app.get('/api/stores/top', async (req, res) => {
-  const limit = Math.min(6, Math.max(1, Number(req.query.limit) || 3));
+// Built once per limit and shared for 30 s; the CDN keeps it a minute.
+const topStores = Object.fromEntries([1, 2, 3, 4, 5, 6].map((limit) => [limit, shared(async () => {
   const stores = {};
   for (const key of crawlableStores()) {
     const { store, total, avgDiscount, items } = await storeOverview(key, limit);
     stores[key] = { store, total, avgDiscount, items };
   }
+  return stores;
+}, 30_000)]));
+app.get('/api/stores/top', async (req, res) => {
+  const limit = Math.min(6, Math.max(1, Number(req.query.limit) || 3));
+  const stores = await topStores[limit]();
   revalidate(res);
+  res.setHeader('Vercel-CDN-Cache-Control', 'max-age=60, stale-while-revalidate=600');
   res.json({ stores });
 });
 
 // Everything the dashboard shows; read from status.json only, no deal files.
 app.get('/api/status', async (req, res) => {
-  const [{ updatedAt, sources, runs = [] }, p, owner] = await Promise.all([readStatus(), currentProgress(), isOwner(req)]);
+  const [{ updatedAt, sources, runs = [] }, p, owner] = await Promise.all([sharedStatus(), sharedProgress(), isOwner(req)]);
   const until = cooldowns(sources);
   res.json({
     server: { startedAt, now: new Date().toISOString(), node: process.version },
@@ -463,8 +510,13 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: status < 500 ? 'The request could not be read.' : 'Something went wrong. Please try again in a moment.' });
 });
 
+// Builds every section's payload in the background as soon as the process starts (also on each
+// cold Vercel instance), so the first crowd doesn't wait while a 3 MB section is parsed.
+const warmDeals = () => Promise.all(SEGMENTS.map((s) => dealsPayload(s).catch((e) => console.error(`[deals] warm-up ${s}:`, e.message))));
+
 // Below: only when running as a normal server (locally, or any host with a lasting process).
-if (!ON_VERCEL) await startServer();
+if (ON_VERCEL) warmDeals();
+else await startServer();
 
 async function startServer() {
   // Accounts need the database; without DATABASE_URL (or if it can't be reached) the site still runs,
@@ -479,6 +531,7 @@ async function startServer() {
   app.listen(config.port, async () => {
     console.log(`iPromotion running at http://localhost:${config.port} (crawl schedules: ${schedules.map((x) => `${x.label ?? "all"} "${x.cron}"`).join(", ")})`);
     if (await migrateLegacy()) console.log('Moved data/deals.json into per-section files (old file kept as deals.json.bak)');
+    warmDeals();
     // First run: no data yet, so crawl right away.
     const { updatedAt } = await readStatus();
     if (!updatedAt) crawlAll(console.log, 'startup').catch((e) => console.error('[crawl]', e));

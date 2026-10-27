@@ -80,6 +80,13 @@ export async function kvGet(key) {
   return rows[0] ? { value: rows[0].value, updatedAt: rows[0].updated_at } : null;
 }
 
+// Only when a row last changed (no value): a cheap check before reading a multi-MB section.
+export async function kvUpdatedAt(key) {
+  await ensureDb();
+  const { rows } = await pool.query('select updated_at from kv where key = $1', [key]);
+  return rows[0]?.updated_at ?? null;
+}
+
 export async function kvSet(key, value) {
   await ensureDb();
   await pool.query(

@@ -86,7 +86,9 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
 
 **Servidor (`src/server.js`):**
 - `GET /api/meta` (tiendas, estado, cooldowns; se consulta con polling), `GET /api/deals?segment=`
-  (sin ofertas caducadas —`isLive` de `src/validity.js`—, con gzip y ETag por contenido/304), `GET /api/status` (dashboard),
+  (sin ofertas caducadas —`isLive` de `src/validity.js`—, con gzip y ETag por contenido/304; se
+  reconstruye solo si cambia `readVersion()` y se precalienta al arrancar; `Vercel-CDN-Cache-Control` 60 s,
+  también en `/api/stores/top`, y 5 s en `/api/meta` para quien no es owner), `GET /api/status` (dashboard),
   `POST /api/crawl[?segment=]` (solo acepta `segment`; aplica cooldown por tienda y devuelve 429
   si no queda nada que hacer). Solo para propietarios: `requireOwner` (`src/auth.js`) verifica el ID
   token de Firebase (`Authorization: Bearer`, firma RS256 contra los certificados de Google, sin

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import config from '../config.js';
-import { kvGet, kvSet, kvDelete, kvPurgeExpired } from './db.js';
+import { kvGet, kvSet, kvDelete, kvPurgeExpired, kvUpdatedAt } from './db.js';
 
 // Data lives in small JSON files, one per sidebar section, so a page only downloads the section
 // it shows:
@@ -44,6 +44,12 @@ export async function readRaw(file) {
   } catch {
     return null;
   }
+}
+
+// When a file last changed, without reading it (null if it doesn't exist yet).
+export async function readVersion(file) {
+  if (useDb()) return kvUpdatedAt(keyOf(file));
+  return fs.stat(file).then((st) => st.mtime, () => null);
 }
 
 // Write to a temp file and rename it into place, so a crash mid-write never leaves a half file.
