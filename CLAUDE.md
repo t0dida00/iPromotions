@@ -147,7 +147,7 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   las de `config.sectionSchedules` tienen el suyo (Food: diario a las 09:00). El dashboard muestra el
   próximo de todos (`nextSchedule()` en `src/server.js`).
 
-**Frontend (`public/`):** HTML/JS vanilla. `/dashboard`, `/promotions` (también `/`), `/clothing`,
+**Frontend (`public/`):** HTML/JS vanilla. `/dashboard` (también `/`), `/promotions`, `/clothing`,
 `/electronics`, `/food` y `/follow` sirven el mismo `index.html`; `app.js` muestra la `<section data-view>` según la ruta.
 Cada `<section data-segment>` carga sus deals solo al abrirse. Los favoritos (categorías con ★)
 se guardan en localStorage por sección sin sesión, y en la cuenta con sesión (`account.active` en

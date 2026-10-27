@@ -539,8 +539,8 @@ for (const btn of document.querySelectorAll('.crawl-btn'))
   });
 
 // Sidebar sections: the URL path (/dashboard, /promotions, /clothing, /electronics) picks which
-// <section data-view> is shown. "/" opens Market Promotions; old #promotions links still work.
-const DEFAULT_VIEW = 'promotions';
+// <section data-view> is shown. "/" opens the dashboard; old #promotions links still work.
+const DEFAULT_VIEW = 'dashboard';
 let currentView = null;
 function showView() {
   const names = [...document.querySelectorAll('.view')].map((v) => v.dataset.view);
