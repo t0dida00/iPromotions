@@ -123,6 +123,11 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   botón de Google del diálogo aparece desactivado. Las rutas que exigen sesión reciben el ID token
   de Firebase en `Authorization: Bearer` y lo verifica `src/auth.js` (sin `firebase-admin`):
   `requireOwner` (refrescos) y `requireUser` (deja `req.user = { uid, email }`).
+- **Shared by buddy** (`/shared`, `src/shared.js` + `public/shared.js`, enlace en `nav-extra` justo encima de la línea de
+  la cuenta): ofertas que los usuarios encuentran en tienda y comparten. `GET /api/shared` es público (sin uid ni email; solo
+  nombre de pila y `canDelete`); `POST` exige sesión (`postFrom` valida; máx. 10 activas por usuario, `rateLimits.share`);
+  `DELETE /api/shared/:id` solo autor u owner. Se muestra hasta el final de `valid_until` (Helsinki; 7 días si no se da,
+  máx. 60); tabla `shared_deals` (sin `DATABASE_URL`, `data/shared.json`); se borran 30 días después de terminar.
 - **Follow your discount** (`/follow`, `src/expiry.js` + `public/expiry.js`): el usuario fotografía
   etiquetas, "Check" envía cada foto (reducida en el navegador a ≤ 768 px) a
   `POST /api/expiry/scan`, que llama a un modelo de visión de Hugging Face (`NUXT_HF_VISION_MODEL`,

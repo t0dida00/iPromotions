@@ -31,6 +31,7 @@ export default {
     scan: { windowMs: 10 * 60_000, max: 30 }, // expiry-date photo checks (each calls the vision model)
     checkout: { windowMs: 10 * 60_000, max: 10 }, // opening a Stripe payment page
     chat: { windowMs: 10 * 60_000, max: 20 }, // deals assistant questions (each calls the text model)
+    share: { windowMs: 10 * 60_000, max: 10 }, // deals posted to Shared by buddy
   },
 
   // "Follow your discount": photo checks per signed-in user per day (bounds the AI cost).

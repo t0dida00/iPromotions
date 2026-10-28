@@ -18,6 +18,7 @@ Node.js (ESM) · Express 5 · Playwright · cheerio · PostgreSQL. No build step
 | **/beauty** | Beauty & Health: KICKS offers, Yliopiston Apteekki member prices and outlet |
 | **/food** | Hesburger and Burger King campaigns (read by the campaign analyst), live Wolt offers near you, links to McDonald's and Subway |
 | **/favorites** | Deals from every starred (☆) category across sections |
+| **/shared** | *Shared by buddy*: deals people spotted in Oulu shops and shared (posting needs a login; posts disappear when they end) |
 | **/follow** | *Follow your discount* (signed in): photograph labels and the use-by / best-before dates go on a calendar |
 | **/pricing** | AI checks (photo checks for *Follow your discount*, deals assistant questions): free checks, packs and Unlimited, paid with Stripe |
 | **Chat (every page)** | *Deals assistant* (signed in): floating button at the bottom-right; ask in English or Finnish ("discounted meat", "what's on sale at Lidl?", "where can I get a discounted burger?") and get matching deals from every store |

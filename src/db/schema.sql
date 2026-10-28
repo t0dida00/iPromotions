@@ -86,3 +86,21 @@ create table if not exists purchases (
   currency     text not null,
   created_at   timestamptz not null default now()
 );
+
+-- "Shared by buddy" (src/shared.js): deals signed-in users spotted and share with everyone. Shown
+-- until the end of valid_until (Helsinki); rows 30 days past it are deleted when someone shares.
+create table if not exists shared_deals (
+  id            uuid primary key,
+  firebase_uid  text not null,
+  author        text not null,                    -- first name shown on the post
+  title         text not null,
+  store         text not null,
+  price         numeric(9, 2),
+  regular_price numeric(9, 2),
+  valid_until   date not null,
+  url           text,
+  note          text,
+  created_at    timestamptz not null default now()
+);
+create index if not exists shared_deals_live on shared_deals (valid_until, created_at desc);
+create index if not exists shared_deals_uid on shared_deals (firebase_uid, valid_until);

@@ -2,6 +2,7 @@ import { showDashboard, hideDashboard } from './dashboard.js';
 import { initAuth, idToken } from './auth.js';
 import { mountWolt, showWolt } from './wolt.js';
 import { mountFollow, showFollow } from './expiry.js';
+import { mountShared, showShared } from './shared.js';
 import { mountPricing, showPricing } from './pricing.js';
 import { friendlyError } from './friendly.js';
 import { mountChat } from './chat.js';
@@ -596,6 +597,7 @@ const foodSection = document.querySelector('section[data-wolt]');
 if (foodSection) mountWolt(foodSection);
 // Follow your discount: product photos → expiry dates on a calendar (public/expiry.js).
 mountFollow(document.querySelector('section[data-view="follow"]'));
+mountShared(document.querySelector('section[data-view="shared"]'));
 mountPricing(document.querySelector('section[data-view="pricing"]'));
 mountHow(document.querySelector('section[data-view="how-it-works"]'));
 // Deals assistant: floating chat at the bottom-right of every page (public/chat.js).
@@ -654,6 +656,7 @@ function showView() {
   else hideDashboard();
   if (currentView === foodSection?.dataset.view) showWolt();
   if (currentView === 'follow') showFollow();
+  if (currentView === 'shared') showShared();
   if (currentView === 'pricing') showPricing();
   if (currentView === 'how-it-works') showHow();
   else hideHow();

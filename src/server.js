@@ -11,6 +11,7 @@ import { readStatus, segmentFile, segmentOf, SEGMENTS, migrateLegacy, readRaw, r
 import { rateLimit } from './rateLimit.js';
 import { authRouter, requireOwner, requireUser, isOwner } from './auth.js';
 import { favoritesRouter } from './favorites.js';
+import { sharedRouter } from './shared.js';
 import { initDb, ensureDb, dbEnabled, hit, query } from './db.js';
 import { scanEnabled, scanLabel, listEntries, entryFrom, addEntry, changeEntry, removeEntry } from './expiry.js';
 import { woltOffers, cachedOffers } from './wolt.js';
@@ -68,6 +69,7 @@ app.use(express.static(PUBLIC, { setHeaders: revalidate }));
 // Firebase settings for Google sign-in in the browser: GET /api/auth-config.
 app.use(authRouter);
 app.use(favoritesRouter);
+app.use(sharedRouter);
 app.use('/api/billing/checkout', checkoutLimit);
 app.use(billingRouter);
 
@@ -460,7 +462,7 @@ app.delete('/api/expiry/:id', requireUser, async (req, res) => {
 });
 
 // Sidebar sections are real URLs; they all load the same page, which shows the matching section.
-app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/beauty', '/food', '/follow', '/how-it-works', '/privacy', '/terms', '/contact', '/pricing'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
+app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/beauty', '/food', '/follow', '/shared', '/how-it-works', '/privacy', '/terms', '/contact', '/pricing'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
 // Scheduled refreshes, off unless set in config.js (the owner refreshes by hand): sections in
 // `sectionSchedules` run on their own cron; the main schedule refreshes every other store. The
