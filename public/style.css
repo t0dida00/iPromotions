@@ -486,6 +486,10 @@ html.no-refresh .crawl-btn, html.no-refresh [data-refresh-seg] { display: none; 
 .review-x:hover, .review-x:focus-visible { background: var(--line); color: var(--text); }
 .review-error { margin: 8px 20px 0; color: var(--sale); font-size: 13px; }
 .review-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--line); margin-top: 12px; }
+/* On phones each field gets the full width: product, then date, then location. */
+@media (max-width: 760px) {
+  .review-fields { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 480px) {
   .review-row { grid-template-columns: 48px minmax(0, 1fr); gap: 10px; }
   .review-thumb { width: 48px; height: 48px; }
