@@ -65,7 +65,9 @@ cuentas y el owner se deduce del token.
 responde 404. El owner refresca desde su ordenador con `npm run start:sync` (`.env.sync` con
 `DATA_STORE=postgres` y el `DATABASE_URL` de Neon, encima de `.env`): los botones Refresh de
 localhost escriben en Neon y la web los ve (también el progreso, vía `crawl-progress.json`).
-`npm run crawl:sync` hace lo mismo desde la terminal y `npm run clear:sync -- --yes`
+`npm run crawl:sync` hace lo mismo desde la terminal, `npm run push:sync -- --yes`
+(`scripts/push-crawl-data.js`) sube a Neon un crawl hecho con ficheros locales (`deals-*.json`,
+`status.json`, `analyst-cache.json`; sin `--yes` solo lista) y `npm run clear:sync -- --yes`
 (`scripts/clear-crawl-data.js`) borra los deals, `status.json` y el progreso online, con copia en
 `data/backup-crawl-*.json`. En
 Vercel Chromium viene de `@sparticuz/chromium` (`src/browser.js`, usa `playwright-core`). Región

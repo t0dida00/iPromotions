@@ -127,6 +127,7 @@ servers, Vercel's included. The owner refreshes from their own computer instead:
 ```bash
 npm run start:sync           # localhost with the online data; Refresh buttons write to Neon
 npm run crawl:sync           # the same from the terminal (all stores, or -- --segment food)
+npm run push:sync -- --yes   # copy a plain `npm start` crawl (data/ files) to the online site
 npm run clear:sync -- --yes  # delete the online deals, status and history (backup in data/)
 ```
 
