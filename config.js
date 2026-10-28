@@ -72,7 +72,8 @@ export default {
   // `label` the full store name, `color` the badge color, `logo` a file in public/logos, `brochureUrl` the link shown in the
   // "Weekly brochures" section. A store with `type: null` is brochure-only (no deals crawled).
   // `segment` picks the sidebar section: 'groceries' (default, Market Promotions), 'clothing'
-  // (Cloth Promotions), 'electronics' (Electronics Promotions) or 'food' (Food Promotions).
+  // (Cloth Promotions), 'electronics' (Electronics Promotions), 'food' (Food Promotions) or 'beauty'
+  // (Beauty & Health Promotions).
   sources: {
     tokmanni: {
       type: 'tokmanni',
@@ -115,10 +116,23 @@ export default {
       label: 'Prisma Linnanmaa',
       color: '#00843d',
       logo: '/logos/prisma.svg',
-      // S-group store id (Prisma Linnanmaa). Any S-group store works (Prisma, S-market, Sale…):
-      // choose it on s-kaupat.fi and read the `s-kaupat-selected-store` cookie.
+      // S-group store id (Prisma Linnanmaa). Any S-group store with an online shop works (Prisma,
+      // S-market; Sale and Prisma Raksila list nothing). List Oulu's ids by POSTing
+      // {"query":"{ searchStores(query: \"oulu\") { stores { id name } } }"} to https://api.s-kaupat.fi/
+      // with the header x-client-name: skaupat-web.
       storeId: '603116906',
       // Prisma has no public weekly flyer page; S-kaupat's campaign page is the closest equivalent.
+      brochureUrl: 'https://www.s-kaupat.fi/tuotteet/kampanjat',
+    },
+    // S-market offers are mostly chain-wide; Herkku (city centre) adds ~60 deals Prisma doesn't have,
+    // the other Oulu S-markets only a handful more each (October 2026).
+    smarket: {
+      type: 'prisma',
+      enabled: true,
+      name: 'S-market',
+      label: 'S-market Herkku Oulu',
+      color: '#e2001a',
+      storeId: '720566314',
       brochureUrl: 'https://www.s-kaupat.fi/tuotteet/kampanjat',
     },
     // Lidl prices are national; crawls this week's campaign pages linked from lidl.fi.
@@ -239,6 +253,28 @@ export default {
       color: '#1e1b58',
       logo: '/logos/gigantti.svg',
       brochureUrl: 'https://www.gigantti.fi/kampanja',
+    },
+
+    // ── Beauty & health (sidebar: Beauty & Health Promotions) ────────────────────────────────
+    // Online prices, the same in the Oulu stores. KICKS is at Ideapark Oulu.
+    kicks: {
+      type: 'kicks',
+      segment: 'beauty',
+      enabled: true,
+      name: 'KICKS',
+      label: 'KICKS Oulu Ideapark',
+      color: '#111111',
+      brochureUrl: 'https://www.kicks.fi/tarjouksessa-nyt',
+    },
+    // Member prices (free loyalty card) and the outlet. YA's Oulu pharmacy is at Isokatu 27.
+    ya: {
+      type: 'ya',
+      segment: 'beauty',
+      enabled: true,
+      name: 'Yliopiston Apteekki',
+      label: 'Yliopiston Apteekki Oulu',
+      color: '#1e7d4f',
+      brochureUrl: 'https://www.yliopistonapteekki.fi/tarjoukset',
     },
 
     // ── Fast food (sidebar: Food Promotions) ──────────────────────────────────────────────

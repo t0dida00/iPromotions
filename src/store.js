@@ -7,7 +7,7 @@ import { kvGet, kvSet, kvDelete, kvPurgeExpired, kvUpdatedAt } from './db.js';
 // Data lives in small JSON files, one per sidebar section, so a page only downloads the section
 // it shows:
 //   data/status.json             store status, refresh history, per-section update times
-//   data/deals-<segment>.json    { updatedAt, deals } for groceries / clothing / electronics
+//   data/deals-<segment>.json    { updatedAt, deals } for groceries / clothing / electronics / beauty / food
 export const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 const LEGACY_FILE = path.join(DATA_DIR, 'deals.json'); // single-file format used before

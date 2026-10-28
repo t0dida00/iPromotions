@@ -46,7 +46,7 @@ export const TOPICS = {
   restaurants: { label: 'fast food and restaurant offers (Hesburger, Burger King, Wolt restaurants)', test: isRestaurant },
   home: { label: 'home, decor, kitchenware', test: (d) => d.group === 'Home & decor' },
   cleaning: { label: 'cleaning and household supplies', test: (d) => d.group === 'Cleaning & household' },
-  beauty: { label: 'beauty, health, cosmetics, personal care', test: (d) => d.group === 'Beauty & health' || d.group === 'Personal care' },
+  beauty: { label: 'beauty, health, cosmetics, personal care, pharmacy, vitamins', test: (d) => d.segment === 'beauty' || d.group === 'Beauty & health' || d.group === 'Personal care' },
   kids: { label: 'kids and toys', test: (d) => d.group === 'Kids & toys' },
   pets: { label: 'pet food and supplies', test: (d) => d.group === 'Pets' },
   garden: { label: 'garden, car and DIY', test: (d) => d.group === 'Garden, car & DIY' },

@@ -2,8 +2,8 @@
 
 <img src="public/logo.svg" width="64" alt="iPromotion logo" />
 
-This week's discounts from supermarkets, clothing, sports and electronics stores and fast-food
-chains around Oulu, in one site with store and category filters, favorites, and a tool that reads
+This week's discounts from supermarkets, clothing, sports, electronics and beauty stores, a pharmacy
+and fast-food chains around Oulu, in one site with store and category filters, favorites, and a tool that reads
 expiry dates from product photos.
 
 Node.js (ESM) · Express 5 · Playwright · cheerio · PostgreSQL. No build step, no frontend framework.
@@ -12,9 +12,10 @@ Node.js (ESM) · Express 5 · Playwright · cheerio · PostgreSQL. No build step
 
 | Page | What it shows |
 | --- | --- |
-| **/promotions** (also `/`) | Groceries: Tokmanni, K-Supermarket, K-Citymarket, Prisma and Lidl, plus links to each store's weekly brochure |
+| **/promotions** (also `/`) | Groceries: Tokmanni, K-Supermarket, K-Citymarket, Prisma, S-market and Lidl, plus links to each store's weekly brochure |
 | **/clothing** | Sale clothing and shoes: XXL, Intersport, Stadium, KappAhl and New Yorker; sale-page links for H&M and Lindex |
 | **/electronics** | Campaign and clearance deals: Power, Verkkokauppa.com and Gigantti |
+| **/beauty** | Beauty & Health: KICKS offers, Yliopiston Apteekki member prices and outlet |
 | **/food** | Hesburger and Burger King campaigns (read by the campaign analyst), live Wolt offers near you, links to McDonald's and Subway |
 | **/favorites** | Deals from every starred (☆) category across sections |
 | **/follow** | *Follow your discount* (signed in): photograph labels and the use-by / best-before dates go on a calendar |
@@ -140,7 +141,7 @@ runs, the site shows the progress too; a store that fails keeps its previous dea
 | --- | --- |
 | Tokmanni | Plain HTTP + cheerio over `/viikkotarjoukset/<category>?p=N` |
 | K-Supermarket / K-Citymarket | Headless Chromium loads the flyer and captures `/kr-api/raw-offer/product-map`; works from a home connection, but K-Ruoka sometimes answers with a Cloudflare challenge (the store then keeps its previous deals) |
-| Prisma | Plain HTTP: S-kaupat's GraphQL API (`RemoteFilteredProducts`, discounted products of one `storeId`) |
+| Prisma, S-market | Plain HTTP: S-kaupat's GraphQL API (`RemoteFilteredProducts`, discounted products of one `storeId`); S-market Herkku, the Oulu S-market with the most deals Prisma lacks |
 | Lidl | Plain HTTP: this week's campaign pages, product JSON in `data-grid-data` |
 | XXL | Headless Chromium on `/kampanjat`, pages through its product search; clothing and shoes only |
 | Intersport | Headless Chromium on the sale pages, clicks "Näytä enemmän" until everything is loaded |
@@ -150,6 +151,8 @@ runs, the site shows the progress too; a store that fails keeps its previous dea
 | Power | Headless Chromium captures the page's own `/api/v2/productlists` calls |
 | Verkkokauppa.com | Headless Chromium captures the page's own discount search |
 | Gigantti | Headless Chromium captures the page's own product search on `/kampanja` |
+| KICKS | Plain HTTP over `/tarjouksessa-nyt?pagesize=180&page=N`, the product list's React props embedded in the page |
+| Yliopiston Apteekki | Plain HTTP + cheerio over the member-offer and outlet lists (Magento, `?p=N`) |
 | Hesburger, Burger King | Plain HTTP: homepage campaign banners and offer pages, read by the campaign analyst |
 | Wolt (live) | Not crawled: when Food opens, the browser's location (rounded to ~1 km) goes to `GET /api/wolt`, and headless Chromium reads wolt.com's "Offers near you" as a logged-out visitor. Without a location: Oulu city center |
 

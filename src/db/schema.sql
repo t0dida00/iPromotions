@@ -26,7 +26,7 @@ create table if not exists kv (
 -- Starred categories per account (logged-out visitors keep theirs in the browser).
 create table if not exists favorites (
   user_id    int  not null references users(id) on delete cascade,
-  segment    text not null,                     -- groceries | clothing | electronics | food
+  segment    text not null,                     -- groceries | clothing | electronics | beauty | food
   category   text not null,                     -- unified category, e.g. 'Shoes'
   created_at timestamptz not null default now(),
   primary key (user_id, segment, category)

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es
 
-iPromotion (antes iBenefits) rastrea (crawl) las ofertas semanales de supermercados (Tokmanni, K-Ruoka, Prisma, Lidl),
+iPromotion (antes iBenefits) rastrea (crawl) las ofertas semanales de supermercados (Tokmanni, K-Ruoka, Prisma, S-market, Lidl),
 tiendas de ropa (XXL, Intersport, Stadium, KappAhl, New Yorker) y electrónica (Power,
-Verkkokauppa.com, Gigantti) de la zona de Oulu, y las muestra en una sola web con filtros.
+Verkkokauppa.com, Gigantti) y belleza/farmacia (KICKS, Yliopiston Apteekki) de la zona de Oulu, y las muestra en una sola web con filtros.
 Node.js (ESM, `"type": "module"`), Express 5, node-cron, cheerio y Playwright (Chromium).
 Sin build, sin bundler, sin framework de frontend. El código, los comentarios y la UI están en inglés.
 
@@ -34,7 +34,7 @@ Variables de entorno: `PORT`, `CRON_SCHEDULE`, `FOOD_CRON_SCHEDULE`, `CRAWL_CONC
 **`config.js` es la fuente de verdad de las tiendas.** Cada clave de `sources` es una tienda:
 `type` elige el crawler (`null` = solo enlace al folleto, p. ej. H&M y Lindex, que bloquean
 navegadores automatizados), `segment` la sección (`groceries` por defecto, `clothing`,
-`electronics`). Varias tiendas pueden compartir crawler (K-Supermarket y K-Citymarket usan `kruoka`;
+`electronics`, `beauty`, `food`). Varias tiendas pueden compartir crawler (K-Supermarket y K-Citymarket usan `kruoka`;
 k-ruoka.fi a veces responde con un challenge de Cloudflare Turnstile, incluso desde casa, y entonces
 la tienda falla y conserva sus deals).
 
@@ -84,15 +84,15 @@ alguna tienda.
 historial de las últimas 20 ejecuciones y hora de actualización por sección. `migrateLegacy()`
 convierte el antiguo `data/deals.json` único.
 
-**Crawlers:** dos estilos. HTTP plano + cheerio/JSON embebido (Tokmanni, Lidl, KappAhl, New Yorker;
-Prisma llama directamente a la API GraphQL de S-kaupat con `storeId` y el hash de la consulta
+**Crawlers:** dos estilos. HTTP plano + cheerio/JSON embebido (Tokmanni, Lidl, KappAhl, New Yorker, KICKS, Yliopiston Apteekki;
+Prisma y S-market llaman directamente a la API GraphQL de S-kaupat con `storeId` y el hash de la consulta
 persistida `QUERY_HASH`, que hay que actualizar si S-kaupat la cambia) o Playwright vía `withBrowser()`
 de `src/browser.js`, que normalmente intercepta las llamadas a la API interna de la propia web en vez
 de parsear el DOM (K-Ruoka, Power, Verkkokauppa, Gigantti, XXL) o pulsa "cargar más" (Intersport, Stadium). Reutiliza `USER_AGENT`, `sleep` y
 `declineCookies` de `src/browser.js`. Política del proyecto: no intentar saltarse protecciones anti-bot.
 
 **Categorías (`src/categories.js`):** listas de reglas regex por segmento (`RULES`,
-`CLOTHING_RULES`, `ELECTRONICS_RULES`); gana la primera que coincide, así que el orden importa
+`CLOTHING_RULES`, `ELECTRONICS_RULES`, `FOOD_RULES`, `BEAUTY_RULES`); gana la primera que coincide, así que el orden importa
 (hay grupos repetidos a propósito). En electrónica se evalúa `"<categoría> <nombre>"`; en los demás,
 la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL/Stadium (`clothingOnly`).
 
@@ -164,7 +164,7 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   muestra el próximo (`nextSchedule()` en `src/server.js`) o "Manual".
 
 **Frontend (`public/`):** HTML/JS vanilla. `/dashboard`, `/promotions` (también `/`), `/clothing`,
-`/electronics`, `/food` y `/follow` sirven el mismo `index.html`; `app.js` muestra la `<section data-view>` según la ruta.
+`/electronics`, `/beauty`, `/food` y `/follow` sirven el mismo `index.html`; `app.js` muestra la `<section data-view>` según la ruta.
 Cada `<section data-segment>` carga sus deals solo al abrirse. Los favoritos (categorías con ★)
 se guardan en localStorage por sección sin sesión, y en la cuenta con sesión (`account.active` en
 `app.js`; se fusionan una vez por inicio de sesión vía `ipromotion:account` de `auth.js`); `/favorites` (`FavoritesView` en `app.js`) junta los deals de
@@ -172,7 +172,7 @@ las categorías favoritas de todas las secciones, leyendo los `PromoView`. En es
 pliega a una columna de iconos (`.app.sidebar-collapsed`, guardado en localStorage y restaurado por un
 `<script>` en línea antes de pintar); en móvil sigue siendo el cajón deslizante. `dashboard.js` pinta `/api/status`. Encima de las tarjetas, `store3d.js` dibuja con three.js (CDN jsdelivr fijado en el
 import map de `index.html`, cargado solo al abrir el dashboard) un pueblo: cuadrícula de calles
-(`STREET_X`/`STREET_Z`, grafo de cruces), una manzana por sección con sus tiendas (escaparates con sus
+(`STREET_X`/`STREET_Z`, grafo de cruces), una manzana por sección (groceries, clothing, electronics y food; Beauty & Health aún no tiene manzana) con sus tiendas (escaparates con sus
 mejores ofertas reales de `GET /api/stores/top`, lámpara verde/ámbar según el último crawl), la HQ y un
 parking con 4 coches. Hay un robot procedural por sección: en un Refresh (`updateStore3d(status)` en cada
 sondeo) conduce por la ruta más corta (Dijkstra, carril derecho, gira en los cruces) a la tienda que se

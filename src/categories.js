@@ -72,14 +72,31 @@ const FOOD_RULES = [
   ['Wraps & subs', /wrap|tortilla|sub\b|patonki|sandwich|leipä/i],
 ];
 
+// Beauty & pharmacy stores: tested against the store's category path (KICKS
+// "Hiukset/Hiustenhoito/Shampoot", YA "vitamiinit ja ravinto/d vitamiini") and, if nothing matches,
+// the product name. Men's and hair tools before hair care; make-up before health ("silmämeikki").
+const BEAUTY_RULES = [
+  ["Men's grooming", /miehet|miesten|parranaj|parta\b|parta &|partave|beard|shav/i],
+  ['Hair tools & brushes', /muotoilutyökal|hiusharj|hiustarvik|suoristusrau|kiharrin|hiustenkuivaa|hair dryer|brush/i],
+  ['Hair care', /hius|hiukset|hiusten|shampo|hoitoaine|hair/i],
+  ['Make-up', /meikki|meikit|huulet|huulipuna|silmämeik|kulmakar|ripsiväri|kynnet|kynsilakka|make-?up|mascara/i],
+  ['Fragrance', /tuoksu|parfyymi|hajuvesi|deodorant|eau de|fragrance/i],
+  ['Sun care', /aurinko|itseruskett|\bspf\d*\b|sunscreen/i],
+  ['Skin care', /ihonhoit|kasvojenhoit|kasvojen|vartalo|k.beauty|voide|seerumi|naamio|jalat|kädet|kadet|luonnonkosmet|cream|lotion|hydrator|cleanser|moistur|serum/i],
+  ['Vitamins & supplements', /vitamiin|ravinto|maitohappo|kalsium|magnesium|sinkki|kalaöljy|kalaoljy|kollagee|glukosamii|omega/i],
+  ['Health & pharmacy', /terveys|oireet|flunssa|ensiapu|hampa|ja suu|silmat|korvat|nenä|nena|intiimi|testit|lääke|laake|kurkku|pastilli|haava|yrttikaramel|yrttitipat/i],
+  ['Gifts & sets', /lahja|joulu|kalenteri|matkapakkau/i],
+];
+
 export const isClothing = (text) => CLOTHING_RULES.some(([, re]) => re.test(text ?? ''));
 
-// `segment` picks the rule set (groceries, clothing or electronics) and its fallback group.
+// `segment` picks the rule set (groceries, clothing, electronics, food or beauty) and its fallback group.
 const SEGMENT_RULES = {
   groceries: [RULES, 'Other'],
   clothing: [CLOTHING_RULES, 'Other clothing'],
   electronics: [ELECTRONICS_RULES, 'Other electronics'],
   food: [FOOD_RULES, 'Other offers'],
+  beauty: [BEAUTY_RULES, 'Other beauty'],
 };
 
 export function unifyCategory(original, segment = 'groceries') {

@@ -25,7 +25,7 @@ export async function crawlPrisma({ storeId, label }, log = console.log) {
     }
     if (products.size === before) break;
   }
-  log(`  prisma: captured ${products.size}/${total} products`);
+  log(`  ${label}: captured ${products.size}/${total} products`);
   if (total > 0 && !products.size) throw new Error(`Prisma: ${total} products listed but none for store ${storeId}`);
   return [...products.values()].map((p) => normalize(p, label));
 }

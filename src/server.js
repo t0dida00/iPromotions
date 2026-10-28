@@ -460,13 +460,13 @@ app.delete('/api/expiry/:id', requireUser, async (req, res) => {
 });
 
 // Sidebar sections are real URLs; they all load the same page, which shows the matching section.
-app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/food', '/follow', '/how-it-works', '/privacy', '/terms', '/contact', '/pricing'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
+app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/beauty', '/food', '/follow', '/how-it-works', '/privacy', '/terms', '/contact', '/pricing'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
 // Scheduled refreshes, off unless set in config.js (the owner refreshes by hand): sections in
 // `sectionSchedules` run on their own cron; the main schedule refreshes every other store. The
 // first start still crawls everything, and the cooldown only limits clicks.
 const ownSchedule = Object.fromEntries(Object.entries(config.sectionSchedules ?? {}).filter(([, expr]) => expr));
-const SECTION_NAMES = { groceries: 'Market Promotions', clothing: 'Cloth Promotions', electronics: 'Electronics Promotions', food: 'Food Promotions' };
+const SECTION_NAMES = { groceries: 'Market Promotions', clothing: 'Cloth Promotions', electronics: 'Electronics Promotions', beauty: 'Beauty & Health Promotions', food: 'Food Promotions' };
 const schedules = [
   { label: Object.keys(ownSchedule).length ? 'Other sections' : null, cron: config.schedule, stores: () => crawlableStores().filter((k) => !ownSchedule[segmentOf(k)]) },
   ...Object.entries(ownSchedule).map(([seg, expr]) => ({ label: SECTION_NAMES[seg] ?? seg, cron: expr, stores: () => crawlableStores().filter((k) => segmentOf(k) === seg) })),

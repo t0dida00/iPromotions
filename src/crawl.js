@@ -16,6 +16,8 @@ import { crawlVerkkokauppa } from './crawlers/verkkokauppa.js';
 import { crawlGigantti } from './crawlers/gigantti.js';
 import { crawlHesburger } from './crawlers/hesburger.js';
 import { crawlBurgerKing } from './crawlers/burgerking.js';
+import { crawlKicks } from './crawlers/kicks.js';
+import { crawlYa } from './crawlers/ya.js';
 import { unifyCategory } from './categories.js';
 import { normalizeValidUntil } from './validity.js';
 
@@ -34,6 +36,8 @@ const CRAWLERS = {
   gigantti: crawlGigantti,
   hesburger: crawlHesburger,
   burgerking: crawlBurgerKing,
+  kicks: crawlKicks,
+  ya: crawlYa,
 };
 
 let running = null;
