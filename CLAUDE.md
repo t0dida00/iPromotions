@@ -199,7 +199,8 @@ Logo en `public/logo.svg`; el favicon (`favicon.svg`) es el mismo dibujo con la 
   sus categorías encajen en las reglas de `src/categories.js`. Actualizar la tabla del README.
 - **Añadir sección:** `segment` en las tiendas, reglas + fallback en `SEGMENT_RULES`, enlace de nav
   y `<section data-view data-segment>` en `public/index.html`, y la ruta en la lista de
-  `app.get([...])` de `src/server.js`.
+  `app.get([...])` de `src/server.js` **y** en el `rewrites` de `vercel.json` (online las páginas las sirve esa regla;
+  sin ella la ruta da 404 en Vercel aunque funcione en localhost). Lo mismo para cualquier página nueva.
 
 `docs/ROADMAP.md` recoge el trabajo pendiente (SQLite + API paginada, historial de precios, alertas,
 tests con fixtures por crawler).
