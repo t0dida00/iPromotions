@@ -63,8 +63,12 @@ Sin GitHub Actions: el botón Refresh del owner en Vercel crawlea en las propias
 `token` aleatorio, `origin`) y lanza `LANES` (2) tiendas; cada una es una llamada a
 `POST /api/crawl/store` (solo con el `token` de la ejecución; responde 202 y crawlea en `waitUntil`,
 corte a los 270 s, `maxDuration` 300 en `vercel.json`) que al terminar guarda su tienda en la sección
-bajo un lock de Postgres (`withLock` de `src/db.js`, advisory lock) y lanza la siguiente; la última
-añade la ejecución al historial. `currentProgress()` no expone `pending`/`token`/`origin`. En
+bajo un lock de Postgres (`withLock` de `src/db.js`, advisory lock). La siguiente tienda **no** la lanza
+la anterior (Vercel corta las cadenas de funciones que se llaman entre sí con 508
+INFINITE_LOOP_DETECTED tras ~4 saltos): la lanza `pumpQueue()` desde el polling de `/api/meta` y
+`/api/status`, así que la página debe seguir abierta durante el Refresh. Una tienda sin respuesta tras
+330 s cuenta como fallida; la última tienda añade la ejecución al historial. `currentProgress()` no
+expone `pending`/`token`/`origin`. En
 Vercel Chromium viene de `@sparticuz/chromium` (`src/browser.js`, usa `playwright-core`). Región
 `fra1` (`vercel.json`, junto a Neon en Frankfurt). `npm run crawl` sale con código 1 si falla
 alguna tienda; con `DATA_STORE=postgres` y el `DATABASE_URL` de Neon escribe en la base de datos online
