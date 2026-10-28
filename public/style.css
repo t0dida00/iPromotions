@@ -486,6 +486,10 @@ html.no-refresh .crawl-btn, html.no-refresh [data-refresh-seg] { display: none; 
 .review-x:hover, .review-x:focus-visible { background: var(--line); color: var(--text); }
 .review-error { margin: 8px 20px 0; color: var(--sale); font-size: 13px; }
 .review-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--line); margin-top: 12px; }
+/* On phones each field gets the full width: product, then date, then location. */
+@media (max-width: 760px) {
+  .review-fields { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 480px) {
   .review-row { grid-template-columns: 48px minmax(0, 1fr); gap: 10px; }
   .review-thumb { width: 48px; height: 48px; }
@@ -642,6 +646,67 @@ html.no-refresh .crawl-btn, html.no-refresh [data-refresh-seg] { display: none; 
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   .card:hover, .brochure:hover, .contact-card:hover, .chat-fab:hover { transform: none; }
 }
+
+/* How the app works (public/how.js): a hand-drawn system diagram with a flow simulation. */
+.nav-extra { margin-bottom: 0; }
+.how { display: flex; flex-direction: column; gap: 14px; padding-top: 20px; padding-bottom: 40px; }
+.how-intro .hint { max-width: 720px; }
+.how-scenarios { padding: 4px 0 12px; }
+.how-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.how-play { min-width: 130px; }
+.how-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); font-size: 12px; }
+.how-legend i { display: inline-block; width: 10px; height: 10px; margin-right: -4px; }
+.how-legend .dot { border-radius: 50%; background: #2f6fd6; }
+.how-legend .dot.async { background: #e8862a; }
+.how-legend .sq { border-radius: 3px; border: 2px solid #f0b429; }
+.how-legend .sq.hot { border-color: var(--sale); background: #fde7ea; }
+/* Dotted paper like the sketch. The whole drawing fits the width; zoom (buttons, pinch, Ctrl/⌘ +
+   wheel) to read details. One finger scrolls the page until zoomed in, then it pans the drawing. */
+.how-board { position: relative; }
+.how-canvas { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: #f6f5f0 radial-gradient(#d5d2c8 1px, transparent 1.2px) 0 0 / 22px 22px; }
+.how-svg { display: block; width: 100%; max-width: 860px; margin: 0 auto; color: #1d1b18; font-family: "Patrick Hand", "Chalkboard SE", "Comic Sans MS", cursive; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.how-svg.zoomed { touch-action: none; cursor: grab; }
+.how-svg.zoomed:active { cursor: grabbing; }
+.how-zoom { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: rgb(255 255 255 / 0.92); box-shadow: 0 4px 14px rgb(40 30 15 / 0.12); }
+.how-zoom .btn { width: 32px; height: 32px; font-size: 18px; }
+.how-zoom .btn:disabled { opacity: 0.35; cursor: default; }
+.how-zoom-level { font-size: 11px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.how-zoom-hint { margin: 6px 2px 0; color: var(--muted); font-size: 12px; }
+.how-zoom-hint .for-touch { display: none; }
+@media (pointer: coarse) { .how-zoom-hint .for-mouse { display: none; } .how-zoom-hint .for-touch { display: inline; } }
+@media (max-width: 760px) { .how-zoom { top: 6px; right: 6px; gap: 2px; padding: 3px; } .how-zoom .btn { width: 28px; height: 28px; font-size: 16px; } }
+.how-edge { fill: none; stroke: #1d1b18; stroke-width: 1.8; }
+.how-edge.async { stroke-dasharray: 7 4 2 4; }
+.how-tag rect { fill: #f6f5f0; }
+.how-tag text { font-size: 14px; text-anchor: middle; fill: #3b3832; }
+.how-shape { fill: #fff; stroke: #1d1b18; stroke-width: 2.2; transition: fill 0.3s, stroke 0.3s; }
+.how-shape.how-ext { stroke-dasharray: 8 5; }
+.how-lid { fill: #cfeedd; }
+.how-stack { fill: #fff; stroke: #8f8b82; stroke-width: 1.6; }
+.how-band { fill: #fbe3a4; stroke: none; }
+.how-head { fill: #cfc4f4; stroke: #1d1b18; stroke-width: 1.6; }
+.how-icon { fill: none; stroke: #1d1b18; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.how-label { font-size: 21px; fill: #1d1b18; }
+.how-label.small { font-size: 18px; }
+.how-sub { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12.5px; font-weight: 600; fill: #57534b; }
+.how-track { fill: #ece9e1; opacity: 0; transition: opacity 0.3s; }
+.how-bar { fill: #f0b429; }
+.how-node.active .how-track { opacity: 1; }
+.how-badge rect { fill: #1d1b18; }
+.how-badge text { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 13px; font-weight: 700; fill: #fff; text-anchor: middle; }
+.how-fire { opacity: 0; transition: opacity 0.3s; }
+.how-fire circle { fill: var(--sale); }
+.how-fire path { fill: #fff; transform: scale(0.95); }
+.how-node.busy .how-shape { stroke: #f0b429; stroke-width: 3.2; }
+.how-node.hot .how-shape { fill: #fde7ea; stroke: var(--sale); stroke-width: 3.2; }
+.how-node.hot .how-bar { fill: var(--sale); }
+.how-node.hot .how-fire { opacity: 1; }
+.how-dot { fill: #2f6fd6; stroke: #fff; stroke-width: 1.5; }
+.how-dot.async { fill: #e8862a; }
+.how-steps { margin: 0; padding: 14px 18px 14px 36px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.how-steps li.done { color: var(--text); }
+.how-steps li.now { color: var(--text); font-weight: 600; }
+.how-steps li.now::marker { color: var(--accent); }
 
 /* iOS Safari zooms the page when a field under 16px gets focus, so touch screens get 16px fields. */
 @media (max-width: 760px), (pointer: coarse) {
