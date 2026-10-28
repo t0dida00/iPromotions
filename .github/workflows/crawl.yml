@@ -1,12 +1,9 @@
 # Crawls the stores and saves deals to the Postgres database (DATA_STORE=postgres) for the website
-# on Vercel. Runs on a schedule, from the Actions tab, or when the owner presses Refresh on the site
-# (src/github.js). GitHub cron is in UTC: 04:00 UTC = 06:00 Helsinki in winter, 07:00 in summer.
+# on Vercel. There is no schedule: it runs only from the Actions tab or when the owner presses
+# Refresh on the site (src/github.js).
 name: Crawl stores
 
 on:
-  schedule:
-    - cron: '0 4 * * 3' # Wednesday: every store except Food (config.schedule)
-    - cron: '0 7 * * *' # daily: Food (config.sectionSchedules.food)
   workflow_dispatch:
     inputs:
       segment:
@@ -44,18 +41,11 @@ jobs:
       - name: Crawl
         # Inputs arrive as environment variables (never pasted into the script) and are checked.
         env:
-          EVENT: ${{ github.event_name }}
-          CRON: ${{ github.event.schedule }}
           SEG_INPUT: ${{ inputs.segment }}
           TRIGGER_INPUT: ${{ inputs.trigger }}
         run: |
-          if [ "$EVENT" = "schedule" ]; then
-            if [ "$CRON" = "0 7 * * *" ]; then SEG=food; else SEG=groceries,clothing,electronics; fi
-            TRIGGER=schedule
-          else
-            SEG="$SEG_INPUT"
-            TRIGGER="${TRIGGER_INPUT:-manual}"
-          fi
+          SEG="$SEG_INPUT"
+          TRIGGER="${TRIGGER_INPUT:-manual}"
           case "$SEG" in *[!a-z,]*) echo "Invalid segment: $SEG"; exit 1;; esac
           case "$TRIGGER" in schedule|manual|cli) ;; *) TRIGGER=manual;; esac
           if [ -n "$SEG" ]; then npm run crawl -- --segment "$SEG" --trigger "$TRIGGER" --skip-failed; else npm run crawl -- --trigger "$TRIGGER" --skip-failed; fi

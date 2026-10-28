@@ -14,7 +14,7 @@ Sin build, sin bundler, sin framework de frontend. El código, los comentarios y
 
 ```bash
 npm install        # postinstall descarga Chromium headless (playwright install chromium)
-npm start          # servidor en http://localhost:3000; crawl al arrancar si no hay datos, luego según cron
+npm start          # servidor en http://localhost:3000; crawl al arrancar si no hay datos, luego con Refresh
 npm run crawl      # crawl puntual de todas las tiendas desde la terminal
 ```
 
@@ -91,8 +91,8 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   (sin ofertas caducadas —`isLive` de `src/validity.js`—, con gzip y ETag por contenido/304; se
   reconstruye solo si cambia `readVersion()` y se precalienta al arrancar; `Vercel-CDN-Cache-Control` 60 s,
   también en `/api/stores/top`, y 5 s en `/api/meta` para quien no es owner), `GET /api/status` (dashboard),
-  `POST /api/crawl[?segment=]` (solo acepta `segment`; aplica cooldown por tienda y devuelve 429
-  si no queda nada que hacer). Solo para propietarios: `requireOwner` (`src/auth.js`) verifica el ID
+  `POST /api/crawl[?segment=]` (solo acepta `segment`; aplica el cooldown por tienda, 0 = desactivado por
+  defecto, y devuelve 429 si no queda nada que hacer). Solo para propietarios: `requireOwner` (`src/auth.js`) verifica el ID
   token de Firebase (`Authorization: Bearer`, firma RS256 contra los certificados de Google, sin
   firebase-admin) y el rol del usuario en la tabla `users`; 401/403 si no. `requireUser` deja en
   `req.user` `{ uid, email, name, role, id }`.
@@ -149,9 +149,10 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   la borra antes (también `DELETE /api/chat/history`); `/new` o "new search" borra solo la memoria
   (`resetContext`). Caché de respuestas compartida (`chatcache-<hash>.json`, clave = búsqueda ya combinada
   + `dataVersion()`, 24 h): repetir una búsqueda no gasta check. Las preguntas no van a los logs.
-- Cron (ignora el cooldown): `config.schedule` (semanal) refresca las secciones sin horario propio;
-  las de `config.sectionSchedules` tienen el suyo (Food: diario a las 09:00). El dashboard muestra el
-  próximo de todos (`nextSchedule()` en `src/server.js`).
+- Sin refresco automático por defecto: el owner refresca a mano (~1 vez por semana) y el workflow de
+  Actions no tiene `schedule`. Solo en servidor local, `CRON_SCHEDULE` (`config.schedule`) y
+  `FOOD_CRON_SCHEDULE` (`config.sectionSchedules`) activan cron (ignora el cooldown); el dashboard
+  muestra el próximo (`nextSchedule()` en `src/server.js`) o "Manual".
 
 **Frontend (`public/`):** HTML/JS vanilla. `/dashboard`, `/promotions` (también `/`), `/clothing`,
 `/electronics`, `/food` y `/follow` sirven el mismo `index.html`; `app.js` muestra la `<section data-view>` según la ruta.

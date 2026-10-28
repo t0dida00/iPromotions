@@ -31,7 +31,7 @@ opened, and an unchanged section costs an empty `304 Not Modified`.
 npm install            # also downloads headless Chromium
 cp .env.example .env   # then fill in what you need (see Configuration)
 docker compose up -d   # optional: Postgres on port 5434 for accounts, favorites and expiry dates
-npm start              # http://localhost:3000; crawls on first start, then on the schedule
+npm start              # http://localhost:3000; crawls on first start, then when you press Refresh
 npm run crawl          # one-off crawl: all stores, or `-- --segment food,clothing`
 ```
 
@@ -77,8 +77,8 @@ environment variables (`.env` locally, which is git-ignored; see `.env.example`)
   reach the server. Plans are in `config.credits`.
 - **Rate limits** per IP (`rateLimits` in `config.js`) return `429` with `Retry-After`. The limits
   on costly work (refreshes, new Wolt areas, photo checks, the daily photo cap per user) are
-  counted in the database, so they hold across server instances. A store refreshed in the last
-  `refreshCooldownMinutes` is skipped.
+  counted in the database, so they hold across server instances. Optionally, a store refreshed in
+  the last `refreshCooldownMinutes` is skipped (0 = off, the default).
 - **Output:** everything scraped is HTML-escaped, and links and images must be `http(s)`.
   Unexpected errors are logged on the server and answered with plain words, never a stack trace.
   Online, Vercel adds `nosniff`, `X-Frame-Options: DENY`, a referrer policy and a permissions
@@ -107,7 +107,7 @@ The schema is in `src/db/schema.sql` and is applied on start (idempotent).
 | --- | --- | --- |
 | Website + API | **Vercel**, region `fra1` | `public/` from the CDN; `/api/*` is the Express app as one function (`api/index.js`, `vercel.json`) |
 | Database | **Neon** Postgres (Vercel Marketplace, Frankfurt) | Pooled `DATABASE_URL` |
-| Crawling | **GitHub Actions** | `.github/workflows/crawl.yml`: Wednesdays (all but Food), daily (Food), and the owner's Refresh button |
+| Crawling | **GitHub Actions** | `.github/workflows/crawl.yml`: only when the owner presses Refresh (or from the Actions tab) |
 | Wolt lookups | Vercel function | Chromium from `@sparticuz/chromium`; ~50 s for a new area, then cached per ~1 km area for 6 hours in the database |
 
 One-time setup:
@@ -155,8 +155,8 @@ you.
   a real offer, plus an English title, price, discount, validity, channel and category. Results
   are cached per banner text, so unchanged banners never call the model again. Without a token the
   banners still show, unanalysed.
-- **Schedule:** every Wednesday at 06:00 for all sections except Food, which runs daily at 09:00
-  (Europe/Helsinki). The owner can refresh a section or everything at any time.
+- **Schedule:** none by default. The owner refreshes a section or everything by hand (about once a
+  week); `CRON_SCHEDULE` / `FOOD_CRON_SCHEDULE` turn on automatic refreshes for a local server.
 
 ## Project layout
 
