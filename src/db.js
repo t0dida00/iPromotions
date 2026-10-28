@@ -53,6 +53,16 @@ export async function withTransaction(fn) {
   }
 }
 
+// Runs fn() while holding the named lock, so callers in other function instances wait their turn
+// (e.g. two stores saving their deals into the same section). fn uses the normal pool; the lock
+// lives in its own transaction until fn finishes.
+export function withLock(name, fn) {
+  return withTransaction(async (client) => {
+    await client.query('select pg_advisory_xact_lock(hashtext($1))', [name]);
+    return fn();
+  });
+}
+
 // Counts one request against `key` in a fixed window shared by every server instance; returns the
 // count so far and when the window ends. Expired windows restart at 1.
 export async function hit(key, windowMs) {

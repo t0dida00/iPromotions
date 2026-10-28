@@ -4,7 +4,7 @@ export const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 
 // `contextOptions` are added to the browser context's, e.g. a geolocation for Wolt.
-// Locally and on GitHub Actions: the Chromium that `playwright install` downloads. In a Vercel
+// Locally: the Chromium that `playwright install` downloads. In a Vercel
 // function (no browser installed, small disk): the compact build from @sparticuz/chromium.
 async function launchOptions() {
   if (!process.env.VERCEL) return { headless: true };

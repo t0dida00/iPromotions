@@ -17,7 +17,7 @@ export const segmentOf = (key) => config.sources[key]?.segment ?? 'groceries';
 export const SEGMENTS = [...new Set(Object.keys(config.sources).map(segmentOf))];
 
 // Where the data lives. Locally: JSON files in data/. Online (Vercel functions have no lasting disk,
-// and the crawler runs on GitHub Actions): DATA_STORE=postgres keeps each "file" as a row in the
+// and each store is crawled by a different function): DATA_STORE=postgres keeps each "file" as a row in the
 // kv table of DATABASE_URL, keyed by its file name. Callers don't notice the difference.
 export const useDb = () => process.env.DATA_STORE === 'postgres';
 const keyOf = (file) => path.basename(file);

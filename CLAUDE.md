@@ -57,17 +57,21 @@ Necesita `DATABASE_URL` (local: `docker compose up -d`, puerto 5434); sin ella e
 cuentas y el owner se deduce del token.
 
 **Despliegue online (gratis):** Vercel (estático `public/` + `api/index.js`, que importa `app` de
-`src/server.js`; con `VERCEL` no hay `listen`, ni cron real, ni crawl al arrancar), Neon (Postgres) y
-GitHub Actions (`.github/workflows/crawl.yml`, `npm run crawl -- --segment … --trigger …`). El botón
-Refresh del owner en Vercel lanza el workflow (`src/github.js`, `GITHUB_TOKEN`/`GITHUB_REPO`). En
+`src/server.js`; con `VERCEL` no hay `listen`, ni cron real, ni crawl al arrancar) y Neon (Postgres).
+Sin GitHub Actions: el botón Refresh del owner en Vercel crawlea en las propias funciones
+(`src/crawlQueue.js`): `startQueue()` guarda la cola en `crawl-progress.json` (`pending`, `running`,
+`token` aleatorio, `origin`) y lanza `LANES` (2) tiendas; cada una es una llamada a
+`POST /api/crawl/store` (solo con el `token` de la ejecución; responde 202 y crawlea en `waitUntil`,
+corte a los 270 s, `maxDuration` 300 en `vercel.json`) que al terminar guarda su tienda en la sección
+bajo un lock de Postgres (`withLock` de `src/db.js`, advisory lock) y lanza la siguiente; la última
+añade la ejecución al historial. `currentProgress()` no expone `pending`/`token`/`origin`. En
 Vercel Chromium viene de `@sparticuz/chromium` (`src/browser.js`, usa `playwright-core`). Región
 `fra1` (`vercel.json`, junto a Neon en Frankfurt). `npm run crawl` sale con código 1 si falla
-alguna tienda; el workflow pasa `--skip-failed`, que deja solo un aviso (las tiendas bloqueadas por las
-IPs de GitHub, como K-Ruoka, Prisma o Stadium, conservan sus deals anteriores). Los errores generales
-(p. ej. la base de datos) siguen dejando el job en rojo.
+alguna tienda; con `DATA_STORE=postgres` y el `DATABASE_URL` de Neon escribe en la base de datos online
+(útil para las tiendas que bloquean IPs de centros de datos, como K-Ruoka, Prisma o Stadium).
 `scripts/import-data.js` copia `data/*.json` a la tabla `kv` (y `expiry.json` a `expiry_entries`).
 
-**Almacenamiento (`src/store.js`):** con `DATA_STORE=postgres` (Vercel y GitHub Actions) cada
+**Almacenamiento (`src/store.js`):** con `DATA_STORE=postgres` (Vercel) cada
 "fichero" es una fila de la tabla `kv` (clave = nombre del fichero) vía las mismas
 `readJson/writeJson/readRaw`; el progreso del crawl se guarda en `crawl-progress.json`
 (`currentProgress()` en `src/crawl.js`) para que la web lo vea. Sin esa variable: JSON en `data/` (en `.gitignore`), escritura atómica
@@ -149,8 +153,7 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   la borra antes (también `DELETE /api/chat/history`); `/new` o "new search" borra solo la memoria
   (`resetContext`). Caché de respuestas compartida (`chatcache-<hash>.json`, clave = búsqueda ya combinada
   + `dataVersion()`, 24 h): repetir una búsqueda no gasta check. Las preguntas no van a los logs.
-- Sin refresco automático por defecto: el owner refresca a mano (~1 vez por semana) y el workflow de
-  Actions no tiene `schedule`. Solo en servidor local, `CRON_SCHEDULE` (`config.schedule`) y
+- Sin refresco automático por defecto: el owner refresca a mano (~1 vez por semana). Solo en servidor local, `CRON_SCHEDULE` (`config.schedule`) y
   `FOOD_CRON_SCHEDULE` (`config.sectionSchedules`) activan cron (ignora el cooldown); el dashboard
   muestra el próximo (`nextSchedule()` en `src/server.js`) o "Manual".
 

@@ -6,13 +6,14 @@ import zlib from 'node:zlib';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import config from '../config.js';
-import { crawlAll, crawlableStores, currentProgress, saveProgress } from './crawl.js';
+import { crawlAll, crawlableStores, currentProgress } from './crawl.js';
 import { readStatus, segmentFile, segmentOf, SEGMENTS, migrateLegacy, readRaw, readVersion } from './store.js';
 import { rateLimit } from './rateLimit.js';
 import { authRouter, requireOwner, requireUser, isOwner } from './auth.js';
 import { favoritesRouter } from './favorites.js';
 import { initDb, ensureDb, dbEnabled, hit, query } from './db.js';
-import { dispatchCrawl } from './github.js';
+import { startQueue, acceptStore, runStore } from './crawlQueue.js';
+import { waitUntil } from '@vercel/functions';
 import { scanEnabled, scanLabel, listEntries, entryFrom, addEntry, changeEntry, removeEntry } from './expiry.js';
 import { woltOffers, cachedOffers } from './wolt.js';
 import { getCredits, reserve, settle } from './credits.js';
@@ -28,7 +29,8 @@ const startedAt = new Date().toISOString();
 const COOLDOWN_MS = (config.refreshCooldownMinutes ?? 10) * 60_000;
 
 // Locally this file is the server (listen, cron, startup crawl). On Vercel, api/index.js imports
-// `app` and Vercel runs it as a function: no listen, and crawls run on GitHub Actions instead.
+// `app` and Vercel runs it as a function: no listen, and each store is crawled by its own function
+// call (src/crawlQueue.js).
 const ON_VERCEL = Boolean(process.env.VERCEL);
 
 export const app = express();
@@ -55,6 +57,14 @@ app.get('/api/health', async (_req, res) => {
   if (dbEnabled()) db = await query('select 1').then(() => true, () => false);
   const lastCrawl = db === false ? null : (await readStatus()).updatedAt;
   res.status(db === false ? 503 : 200).json({ ok: db !== false, db, lastCrawl });
+});
+// One store of an online Refresh (src/crawlQueue.js), called by our own functions with the run's
+// token. Answers at once and crawls in the background; no rate limit (all calls come from Vercel).
+app.post('/api/crawl/store', express.json({ limit: '1kb' }), async (req, res) => {
+  const { key, token } = req.body ?? {};
+  if (!ON_VERCEL || !(await acceptStore(key, token))) return res.status(403).json({ error: 'Not allowed' });
+  res.status(202).json({ crawling: key });
+  waitUntil(runStore(key, token).catch((e) => console.error(`[crawl] ${key}:`, e)));
 });
 // Stripe → us (src/billing.js): raw body for the signature check, and no rate limit (Stripe retries).
 app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }), stripeWebhook);
@@ -102,7 +112,7 @@ const storeList = () =>
     }));
 
 // `crawling` is false, or the stores in the current run (plus any queued ones). The run may be in
-// this process or, online, on GitHub Actions (src/crawl.js currentProgress).
+// this process or, online, in the Vercel functions (src/crawl.js currentProgress).
 const crawlingInfo = (p) => (p ? { scope: [...new Set([...(p.scope ?? []), ...(p.queued ?? [])])], running: p.running ?? [], done: p.done ?? [] } : false);
 
 // When each store may be refreshed again by hand (null = now).
@@ -264,19 +274,14 @@ app.post('/api/crawl', requireOwner, crawlLimit, async (req, res) => {
   }
   const queued = Boolean(p);
   if (ON_VERCEL) {
-    // Online the crawl runs on GitHub Actions (.github/workflows/crawl.yml); it starts in ~30 s.
-    const segs = [...new Set(start.map(segmentOf))];
+    // Online every store is crawled by its own function call, a few at a time (src/crawlQueue.js).
     try {
-      await dispatchCrawl(segment ? segs : null);
+      const run = await startQueue(start, 'manual', `${req.protocol}://${req.get('host')}`);
+      return res.status(202).json({ crawling: true, queued: run.queued, stores: start, skipped });
     } catch (e) {
-      console.error('[crawl] could not start the GitHub job:', e.message);
+      console.error('[crawl] could not start:', e.message);
       return res.status(502).json({ error: "Couldn't start the refresh right now. Please try again in a moment." });
     }
-    // Show the section as busy until the job reports its own progress. A whole section is queued,
-    // since the job refreshes sections, not single stores.
-    const scope = crawlableStores().filter((k) => segs.includes(segmentOf(k)));
-    await saveProgress({ startedAt: null, trigger: 'manual', scope: [], running: [], done: [], queued: scope, sources: {} });
-    return res.status(202).json({ crawling: true, queued, stores: scope, skipped });
   }
   crawlAll(console.log, 'manual', start).catch((e) => console.error('[crawl]', e));
   res.status(202).json({ crawling: true, queued, stores: start, skipped });
@@ -483,7 +488,7 @@ const schedules = [
   ...Object.entries(ownSchedule).map(([seg, expr]) => ({ label: SECTION_NAMES[seg] ?? seg, cron: expr, stores: () => crawlableStores().filter((k) => segmentOf(k) === seg) })),
 ].filter((s) => s.cron).map((s) => ({
   ...s,
-  // On Vercel the schedules only report their next run (GitHub Actions does the crawling).
+  // On Vercel the schedules only report their next run (a function can't run a cron).
   task: cron.schedule(s.cron, ON_VERCEL ? () => {} : () => crawlAll(console.log, 'schedule', s.stores()).catch((e) => console.error('[cron]', e)), { timezone: config.timezone }),
 }));
 
