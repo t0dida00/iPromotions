@@ -62,7 +62,9 @@ GitHub Actions (`.github/workflows/crawl.yml`, `npm run crawl -- --segment … -
 Refresh del owner en Vercel lanza el workflow (`src/github.js`, `GITHUB_TOKEN`/`GITHUB_REPO`). En
 Vercel Chromium viene de `@sparticuz/chromium` (`src/browser.js`, usa `playwright-core`). Región
 `fra1` (`vercel.json`, junto a Neon en Frankfurt). `npm run crawl` sale con código 1 si falla
-alguna tienda, para que el job de Actions quede en rojo.
+alguna tienda; el workflow pasa `--skip-failed`, que deja solo un aviso (las tiendas bloqueadas por las
+IPs de GitHub, como K-Ruoka, Prisma o Stadium, conservan sus deals anteriores). Los errores generales
+(p. ej. la base de datos) siguen dejando el job en rojo.
 `scripts/import-data.js` copia `data/*.json` a la tabla `kv` (y `expiry.json` a `expiry_entries`).
 
 **Almacenamiento (`src/store.js`):** con `DATA_STORE=postgres` (Vercel y GitHub Actions) cada
