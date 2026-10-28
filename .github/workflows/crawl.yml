@@ -58,4 +58,4 @@ jobs:
           fi
           case "$SEG" in *[!a-z,]*) echo "Invalid segment: $SEG"; exit 1;; esac
           case "$TRIGGER" in schedule|manual|cli) ;; *) TRIGGER=manual;; esac
-          if [ -n "$SEG" ]; then npm run crawl -- --segment "$SEG" --trigger "$TRIGGER"; else npm run crawl -- --trigger "$TRIGGER"; fi
+          if [ -n "$SEG" ]; then npm run crawl -- --segment "$SEG" --trigger "$TRIGGER" --skip-failed; else npm run crawl -- --trigger "$TRIGGER" --skip-failed; fi

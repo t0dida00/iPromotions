@@ -227,8 +227,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { deals, failed } = status.runs[0];
   const where = useDb() ? 'to the database' : `to ${DATA_DIR}`;
   console.log(`Saved ${deals} deals ${where}`);
-  // A failed store keeps its previous deals, but exits non-zero so the GitHub Actions run shows red
-  // (and GitHub emails about scheduled runs that fail). Exiting also closes the database pool.
-  if (failed.length) console.error(`Failed: ${failed.join(', ')}`);
-  process.exit(failed.length ? 1 : 0);
+  // A failed store keeps its previous deals, but exits non-zero so the run shows red, unless
+  // --skip-failed is given (GitHub Actions: then it is only a warning on the run). Errors that stop
+  // the whole crawl, such as the database being unreachable, still exit non-zero.
+  // Exiting also closes the database pool.
+  const skip = process.argv.includes('--skip-failed');
+  if (failed.length) {
+    const msg = `Failed: ${failed.join(', ')}`;
+    console.error(skip && process.env.GITHUB_ACTIONS ? `::warning title=Stores skipped::${msg}` : msg);
+  }
+  process.exit(failed.length && !skip ? 1 : 0);
 }
