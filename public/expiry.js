@@ -8,6 +8,7 @@
 import { idToken, openDialog } from './auth.js';
 import { toast } from './toast.js';
 import { openChat } from './chat.js';
+import { dateField, installDateFields } from './datefield.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const MAX_SIDE = 768; // px: keeps a photo around 500 image tokens
@@ -206,7 +207,7 @@ function reviewRow(p) {
       <label class="review-field review-product"><span>Product name</span>
         <input name="product" value="${esc(d.product)}" placeholder="e.g. Chicken fillet" maxlength="60" required /></label>
       <label class="review-field"><span>Date</span>
-        <input name="date" type="date" value="${esc(d.date)}" required /></label>
+        ${dateField(d.date, { name: 'date', required: true })}</label>
       <label class="review-field review-location"><span>Location</span>
         <input name="location" value="${esc(d.location)}" placeholder="e.g. Prisma Linnanmaa" maxlength="60" /></label>
     </div>
@@ -220,7 +221,8 @@ function readDrafts() {
     const p = photos.find((x) => x.id === row.dataset.id);
     if (!p) continue;
     const val = (name) => row.querySelector(`[name="${name}"]`).value.trim();
-    p.draft = { ...p.draft, product: val('product'), date: val('date'), location: val('location') }; // kind isn't shown; keep the scanned one
+    const date = row.querySelector('[name="date"]').dataset.iso; // the field shows dd/mm/yyyy
+    p.draft = { ...p.draft, product: val('product'), date, location: val('location') }; // kind isn't shown; keep the scanned one
   }
 }
 
@@ -475,7 +477,7 @@ function photoItem(p) {
     ${status}
     ${p.status === 'failed' && p.data ? `<div class="tray-fix">
       ${p.outOfChecks ? '<a class="btn btn-sm btn-primary" href="/pricing" data-view-link>Get checks</a>' : `<button class="btn btn-sm" data-act="retry" data-id="${p.id}">Retry</button>`}
-      <input type="date" data-act="manual" data-id="${p.id}" aria-label="Enter the date by hand" title="Enter the date by hand" />
+      ${dateField('', { 'data-act': 'manual', 'data-id': p.id, 'aria-label': 'Enter the date by hand', title: 'Enter the date by hand' })}
     </div>` : ''}
   </li>`;
 }
@@ -552,7 +554,7 @@ function upcomingRow(e) {
       </label>
     </span>
     <span class="up-tools">
-      <input type="date" value="${e.date}" data-act="redate" data-id="${e.id}" aria-label="Change date" />
+      ${dateField(e.date, { 'data-act': 'redate', 'data-id': e.id, 'aria-label': 'Change date' })}
       ${n >= 0 ? `<button class="btn btn-sm btn-icon up-find" data-act="find" data-id="${e.id}" aria-label="Find deals like ${esc(e.product)}" title="Find deals like this">${SEARCH}</button>` : ''}
       <button class="btn btn-sm" data-act="ics" data-id="${e.id}" title="Add to calendar (.ics)">.ics</button>
       <button class="btn btn-sm btn-icon" data-act="delete" data-id="${e.id}" aria-label="Delete">×</button>
@@ -563,6 +565,7 @@ function upcomingRow(e) {
 // ── Wiring ───────────────────────────────────────────────────────────────────────────────────
 export function mountFollow(section) {
   root = section;
+  installDateFields();
   mountReview();
   root.addEventListener('click', (e) => {
     const el = e.target.closest('[data-act]');
@@ -604,8 +607,8 @@ export function mountFollow(section) {
     if (act === 'files') {
       addFiles([...el.files]);
       el.value = '';
-    } else if (act === 'manual' && el.value) addByHand(photos.find((p) => p.id === id), el.value);
-    else if (act === 'redate' && el.value) changeEntry(id, { date: el.value });
+    } else if (act === 'manual' && el.dataset.iso) addByHand(photos.find((p) => p.id === id), el.dataset.iso);
+    else if (act === 'redate' && el.dataset.iso) changeEntry(id, { date: el.dataset.iso });
     else if (act === 'rename' && el.value.trim()) changeEntry(id, { product: el.value.trim() });
     else if (act === 'relocate') changeEntry(id, { location: el.value.trim() });
   });

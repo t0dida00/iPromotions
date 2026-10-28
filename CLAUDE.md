@@ -130,7 +130,7 @@ la categoría y, si cae en "Other", el nombre. `isClothing()` filtra ropa en XXL
   (~500 tokens y 1–2 s por foto). El modelo devuelve la fecha y **las palabras impresas junto a
   ella**; el tipo (use-by / best-before / fecha de envasado, que se descarta) lo decide `KINDS` en
   código, porque el modelo los confunde. Las fechas encontradas no se guardan solas: un diálogo de revisión
-  (nombre, fecha, tipo, ubicación; Save / Cancel) las guarda con `POST /api/expiry`. "Enter manually" abre ese mismo diálogo con una fila vacía, sin foto. Las fechas se guardan por usuario en la tabla `expiry_entries`
+  (nombre, fecha, tipo, ubicación; Save / Cancel) las guarda con `POST /api/expiry`. "Enter manually" abre ese mismo diálogo con una fila vacía, sin foto. Las fechas se muestran siempre como dd/mm/yyyy (`public/datefield.js`: texto con máscara + `<input type="date">` transparente sobre el icono para el selector del dispositivo; el valor ISO va en `data-iso`). Las fechas se guardan por usuario en la tabla `expiry_entries`
   (sin `DATABASE_URL`, en `data/expiry.json`; CRUD en `/api/expiry`); las fotos no se guardan.
   Límites: `rateLimits.scan` por IP y `expiryScansPerDay` por usuario, contados en la tabla
   `rate_counters` para que valgan entre instancias de Vercel. Cada foto con fecha encontrada gasta
