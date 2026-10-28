@@ -223,13 +223,20 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
   .filters, .filters > .wrap { display: contents; }
   .filters > .wrap > * { margin-left: 16px; margin-right: 16px; }
   .filters .tools { position: sticky; top: 0; z-index: 5; margin: 0; padding: 10px 16px; background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
-  .cats { position: static; flex-direction: row; overflow-x: auto; max-height: none; padding-bottom: 4px; }
-  .cat { flex: none; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
-  .cat-row { flex: none; }
+  /* Categories: one row of pills that scrolls sideways, edge to edge like the brochures. Each pill
+     holds its name, count and star, so the star reads as part of its category. */
+  .cats { position: static; flex-direction: row; align-items: center; gap: 6px; overflow-x: auto; max-height: none; margin: 0 -16px; padding: 2px 16px 4px; scroll-padding-inline: 16px; scrollbar-width: none; }
+  .cats::-webkit-scrollbar { display: none; }
+  .cat-row { flex: none; gap: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+  .cat-row:has(.cat[aria-pressed="true"]) { border-color: var(--accent); background: var(--accent); }
+  .cat { flex: none; gap: 6px; padding: 6px 4px 6px 12px; border-radius: 999px; background: none; font-size: 14px; white-space: nowrap; }
+  .cat:hover, .cat[aria-pressed="true"] { background: none; }
+  .cat-row:has(.star-spacer) .cat { padding-right: 12px; }
   .star-spacer { display: none; }
-  .star { opacity: 1; }
-  .cats-head { align-self: center; white-space: nowrap; padding: 0 4px; }
-  .cats-sep { width: auto; height: 24px; margin: auto 4px; border-top: 0; border-left: 1px solid var(--line); }
+  .star { opacity: 1; width: 34px; height: 32px; border-radius: 999px; font-size: 15px; }
+  .cat-row:has(.cat[aria-pressed="true"]) .star { color: var(--accent-ink); }
+  .cats-head { align-self: center; white-space: nowrap; padding: 0 2px; font-size: 11px; }
+  .cats-sep { flex: none; width: auto; height: 22px; margin: 0 2px; border-top: 0; border-left: 1px solid var(--line); }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .card .price { font-size: 17px; }
   /* Brochures: one row of compact tiles that scrolls sideways, edge to edge, instead of tall cards
