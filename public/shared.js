@@ -10,7 +10,6 @@ let dialog = null;
 let posts = null; // null until loaded
 let loadError = null;
 let signedIn = false;
-let storeNames = [];
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const euro = (n) => (n == null ? '' : `${Number(n).toFixed(2).replace('.', ',')} €`);
@@ -107,8 +106,7 @@ function openForm() {
       <label class="review-field buddy-wide">What's on offer
         <input name="title" required maxlength="80" placeholder="e.g. Salmon fillet −40 %" autocomplete="off" /></label>
       <label class="review-field buddy-wide">Store
-        <input name="store" required maxlength="60" list="buddy-stores" placeholder="e.g. Prisma Linnanmaa" autocomplete="off" />
-        <datalist id="buddy-stores">${storeNames.map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist></label>
+        <input name="store" required maxlength="60" placeholder="e.g. Prisma Linnanmaa" autocomplete="off" /></label>
       <label class="review-field">Price (€)
         <input name="price" inputmode="decimal" maxlength="9" placeholder="4,99" autocomplete="off" /></label>
       <label class="review-field">Normal price (€)
@@ -130,11 +128,64 @@ function openForm() {
   dialog.querySelector('[name="title"]').focus();
 }
 
+// Prices: digits and one decimal comma (or dot) with at most 2 decimals, so no minus sign or letters.
+const PRICE = /^\d{1,6}([.,]\d{1,2})?$/;
+const toNumber = (s) => Number(s.replace(',', '.'));
+function cleanPrice(input) {
+  let v = input.value.replace(/[^\d.,]/g, '');
+  const sep = v.search(/[.,]/);
+  if (sep >= 0) v = v.slice(0, sep + 1) + v.slice(sep + 1).replace(/[.,]/g, '').slice(0, 2);
+  if (v !== input.value) input.value = v;
+}
+
+// What's wrong with the form, per field name (empty when it can be sent).
+function problems(form) {
+  const v = (n) => form.querySelector(`[name="${n}"]`).value.trim();
+  const out = {};
+  if (v('title').length < 3) out.title = 'Say what the deal is (at least 3 characters).';
+  if (!v('store')) out.store = 'Say which store has the deal.';
+  const price = v('price');
+  const regular = v('regularPrice');
+  if (price && !PRICE.test(price)) out.price = 'Enter a price like 4,99.';
+  if (regular && !PRICE.test(regular)) out.regularPrice = 'Enter a price like 7,99.';
+  else if (regular && !price) out.price = 'Add the deal price too.';
+  else if (regular && PRICE.test(price) && toNumber(regular) <= toNumber(price)) out.regularPrice = 'The normal price should be higher than the deal price.';
+  const date = form.querySelector('[name="validUntil"]');
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Helsinki' }).format(new Date());
+  if (date.value && !date.dataset.iso) out.validUntil = 'Enter a real date as dd/mm/yyyy, or leave it empty.';
+  else if (date.dataset.iso && date.dataset.iso < today) out.validUntil = 'That date has already passed.';
+  if (v('url') && !/^https?:\/\/[^\s/]+\.\S+$/i.test(v('url'))) out.url = 'The link should start with https://.';
+  return out;
+}
+
+// Shows a problem under its field and marks the field red; no text clears it.
+function markField(form, name, text) {
+  const input = form.querySelector(`[name="${name}"]`);
+  const label = input.closest('.review-field');
+  let note = label.querySelector('.field-error');
+  if (!text) {
+    input.removeAttribute('aria-invalid');
+    note?.remove();
+    return;
+  }
+  input.setAttribute('aria-invalid', 'true');
+  if (!note) {
+    note = document.createElement('span');
+    note.className = 'field-error';
+    label.append(note);
+  }
+  note.textContent = text;
+}
+
 async function submit(form) {
   const err = form.querySelector('.review-error');
   const field = (n) => form.querySelector(`[name="${n}"]`);
+  err.hidden = true;
+  const found = problems(form);
+  for (const name of ['title', 'store', 'price', 'regularPrice', 'validUntil', 'url']) markField(form, name, found[name]);
+  const first = Object.keys(found)[0];
+  if (first) return field(first).focus();
   const date = field('validUntil');
-  if (date.value && !date.dataset.iso) return showError(err, 'Enter the end date as dd/mm/yyyy, or leave it empty.');
   const body = {
     title: field('title').value,
     store: field('store').value,
@@ -192,6 +243,12 @@ export function mountShared(section) {
   dialog.addEventListener('click', (e) => {
     if (e.target.closest('[data-cancel]') || e.target === dialog) dialog.close();
   });
+  dialog.addEventListener('input', (e) => {
+    const input = e.target.closest('input, textarea');
+    if (!input?.name) return;
+    if (input.name === 'price' || input.name === 'regularPrice') cleanPrice(input);
+    if (input.hasAttribute('aria-invalid')) markField(input.form, input.name, null);
+  });
   dialog.addEventListener('submit', (e) => {
     e.preventDefault();
     submit(e.target);
@@ -210,7 +267,5 @@ export function mountShared(section) {
 }
 
 export function showShared() {
-  if (!storeNames.length)
-    fetch('/api/meta').then((r) => r.json()).then((m) => (storeNames = [...new Set((m.stores ?? []).map((s) => s.label ?? s.name))].sort())).catch(() => {});
   load();
 }

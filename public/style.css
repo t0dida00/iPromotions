@@ -756,3 +756,7 @@ html.no-refresh .crawl-btn, html.no-refresh [data-refresh-seg] { display: none; 
 .buddy-fields .date-field { width: 100%; }
 .buddy-fields .date-field input[type="text"] { width: 100%; }
 @media (max-width: 760px) { .buddy-fields { grid-template-columns: minmax(0, 1fr); } .buddy-head .btn { width: 100%; } }
+.buddy-fields [aria-invalid="true"] { border-color: var(--sale); }
+.field-error { color: var(--sale); font-size: 12px; font-weight: 500; }
+.buddy-fields [aria-invalid="true"] { border-color: var(--sale); }
+.field-error { color: var(--sale); font-size: 12px; font-weight: 500; }
