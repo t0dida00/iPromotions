@@ -33,9 +33,10 @@ Variables de entorno: `PORT`, `CRON_SCHEDULE`, `FOOD_CRON_SCHEDULE`, `CRAWL_CONC
 
 **`config.js` es la fuente de verdad de las tiendas.** Cada clave de `sources` es una tienda:
 `type` elige el crawler (`null` = solo enlace al folleto, p. ej. H&M y Lindex, que bloquean
-navegadores automatizados, y K-Supermarket/K-Citymarket, con challenge de Cloudflare Turnstile en
-k-ruoka.fi; su crawler `kruoka` se conserva), `segment` la sección (`groceries` por defecto, `clothing`,
-`electronics`). Varias tiendas pueden compartir crawler (K-Supermarket y K-Citymarket usaban `kruoka`).
+navegadores automatizados), `segment` la sección (`groceries` por defecto, `clothing`,
+`electronics`). Varias tiendas pueden compartir crawler (K-Supermarket y K-Citymarket usan `kruoka`;
+k-ruoka.fi a veces responde con un challenge de Cloudflare Turnstile, incluso desde casa, y entonces
+la tienda falla y conserva sus deals).
 
 **Flujo de un crawl (`src/crawl.js`):**
 1. `crawlAll(log, trigger, only)` reparte las tiendas habilitadas entre un pool de workers
@@ -87,7 +88,7 @@ convierte el antiguo `data/deals.json` único.
 Prisma llama directamente a la API GraphQL de S-kaupat con `storeId` y el hash de la consulta
 persistida `QUERY_HASH`, que hay que actualizar si S-kaupat la cambia) o Playwright vía `withBrowser()`
 de `src/browser.js`, que normalmente intercepta las llamadas a la API interna de la propia web en vez
-de parsear el DOM (Power, Verkkokauppa, Gigantti, XXL) o pulsa "cargar más" (Intersport, Stadium). Reutiliza `USER_AGENT`, `sleep` y
+de parsear el DOM (K-Ruoka, Power, Verkkokauppa, Gigantti, XXL) o pulsa "cargar más" (Intersport, Stadium). Reutiliza `USER_AGENT`, `sleep` y
 `declineCookies` de `src/browser.js`. Política del proyecto: no intentar saltarse protecciones anti-bot.
 
 **Categorías (`src/categories.js`):** listas de reglas regex por segmento (`RULES`,
