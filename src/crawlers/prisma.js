@@ -78,8 +78,8 @@ function normalize(p, store) {
     price,
     regularPrice: regular && regular > price ? regular : null,
     dealText: ruleText(rule) ?? p.labels?.map((l) => l.labelText).filter(Boolean).join(', ') ?? null,
-    // The CDN takes modifiers as w300_h300_q75 (the old "w_300,h_300,q_75" now answers 400).
-    image: img ? img.replace('{MODIFIERS}', 'w300_h300_q75').replace('{EXTENSION}', 'jpg') : null,
+    // The CDN takes modifiers as w600_h600_q75 (the old "w_300,h_300,q_75" now answers 400).
+    image: img ? img.replace('{MODIFIERS}', 'w600_h600_q75').replace('{EXTENSION}', 'jpg') : null,
     url: `${BASE}/tuote/${p.slug}/${p.ean}`,
     validUntil: pr.campaignPriceValidUntil ?? null,
   };

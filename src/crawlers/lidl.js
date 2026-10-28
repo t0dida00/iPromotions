@@ -67,10 +67,16 @@ function normalize(d, campaign) {
     price,
     regularPrice: old && old > price ? old : null,
     dealText: [usePlus ? 'Lidl Plus' : null, highlight].filter(Boolean).join(': ') || null,
-    image: d.image ?? null,
+    image: mediumImage(d) ?? d.image ?? null,
     url: new URL(d.canonicalUrl ?? '/', BASE).href,
     validUntil: d.storeEndDate ? new Date(d.storeEndDate * 1000).toISOString() : plusPrice?.endDate ?? null,
   };
+}
+
+// d.image is 380 px wide; the same picture (4:3) also comes at 772 px, sharp on phone screens.
+function mediumImage(d) {
+  const variants = d.imageList_V2?.[0]?.variants ?? [];
+  return (variants.find((v) => v.sizes?.smallUrl === d.image) ?? variants.find((v) => v.ratio === '4:3'))?.sizes?.mediumUrl;
 }
 
 // Lidl's own categories are coarse ("Food", "F+V"), so lean on the campaign page title

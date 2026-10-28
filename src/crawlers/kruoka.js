@@ -59,7 +59,8 @@ function normalize(p, store) {
     price: unitDealPrice,
     regularPrice: normal?.price && normal.price > unitDealPrice ? normal.price : null,
     dealText: amount > 1 ? `${amount} kpl / ${fmt(deal.price)} €${label}` : label.trim() || null,
-    image: p.productAttributes?.image?.url ?? null,
+    // The original is a 1440 px PNG (~1.2 MB); a 600 px JPEG is ~45 KB and still sharp on phones.
+    image: p.productAttributes?.image?.url ? `${p.productAttributes.image.url}?w=600&fm=jpg` : null,
     url: slug ? `https://www.k-ruoka.fi/kauppa/tuote/${slug}` : 'https://www.k-ruoka.fi/',
     validUntil: deal.endDate ?? null,
   };

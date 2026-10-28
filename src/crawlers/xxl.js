@@ -68,7 +68,8 @@ function normalize(p) {
     price,
     regularPrice: values.alternate_price > price ? values.alternate_price : null,
     dealText: campaign.splash && !/^-?\d+%$/.test(campaign.splash) ? campaign.splash : null,
-    image: p.imageInfo?.thumbnail ?? null,
+    // The thumbnail is a 1536 px PNG (~350 KB); the CDN resizes it.
+    image: p.imageInfo?.thumbnail ? `${p.imageInfo.thumbnail}?resize=600,600` : null,
     url: new URL(p.link, BASE).href,
     // Ongoing offers (e.g. multibuy) carry an end date years away; treat those as open-ended.
     validUntil: campaign.end_date && new Date(campaign.end_date) - Date.now() < 365 * 864e5 ? campaign.end_date : null,

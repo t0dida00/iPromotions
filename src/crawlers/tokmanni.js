@@ -35,7 +35,8 @@ function parseProducts($, category) {
         price,
         regularPrice: regularPrice && regularPrice > (price ?? 0) ? regularPrice : null,
         dealText: $el.find('.campaign-label').first().text().replace(/\s+/g, ' ').trim() || null,
-        image: $el.find('img').first().attr('src') || null,
+        // The listing asks Cloudinary for 328 px; 600 px stays sharp on phone screens.
+        image: $el.find('img').first().attr('src')?.replace(/\bh_\d+,w_\d+\b/, 'h_600,w_600') || null,
         url,
         validUntil: null,
       };

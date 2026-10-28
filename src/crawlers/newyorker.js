@@ -50,7 +50,7 @@ function normalize(p) {
     price: v.current_price,
     regularPrice: v.original_price > v.current_price ? v.original_price : null,
     dealText: 'In-store price',
-    image: img ? `https://api.newyorker.de/csp/images/image/public/${img}?res=mid` : null,
+    image: img ? `https://api.newyorker.de/csp/images/image/public/${img}?res=high` : null,
     url: `${SITE}#/detail/${p.id}/${v.id}`,
     validUntil: null,
   };
