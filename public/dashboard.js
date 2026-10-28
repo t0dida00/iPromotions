@@ -145,7 +145,7 @@ function render(s) {
     return x.status.ok ? '<span class="pill ok">Online</span>' : '<span class="pill bad">Failed</span>';
   };
 
-  const SEGMENTS = { groceries: 'Market Promotions', clothing: 'Cloth Promotions', electronics: 'Electronics Promotions', beauty: 'Beauty & Health Promotions', food: 'Food Promotions' };
+  const SEGMENTS = { groceries: 'Supermarkets', clothing: 'Clothes', electronics: 'Electronics', beauty: 'Beauty & Health', food: 'Food' };
   const services = Object.entries(SEGMENTS)
     .map(([seg, title]) => {
       const rows = s.stores.filter((x) => (x.segment ?? 'groceries') === seg);

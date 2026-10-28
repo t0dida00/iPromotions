@@ -59,7 +59,7 @@ const SCENARIOS = {
   browse: {
     label: 'Open a deals page',
     steps: [
-      { text: 'A visitor opens Market Promotions. The page, its scripts and the store logos come straight from Vercel’s CDN; no server of ours runs.', flows: { visit: 5 }, load: { cdn: 0.3 } },
+      { text: 'A visitor opens Supermarkets. The page, its scripts and the store logos come straight from Vercel’s CDN; no server of ours runs.', flows: { visit: 5 }, load: { cdn: 0.3 } },
       { text: 'The section’s deals (/api/deals, gzipped) are kept by the CDN for 60 seconds too, so most visits end there.', flows: { visit: 5 }, load: { cdn: 0.35 } },
       { text: 'About once a minute the CDN asks again. The API server answers from its memory and only asks Neon whether the section changed — a tiny query, not the 3 MB section.', flows: { visit: 3, miss: 1, db: 0.6 }, load: { cdn: 0.25, app: 0.2, cache: 0.3, neon: 0.1 } },
     ],
@@ -93,7 +93,7 @@ const SCENARIOS = {
   wolt: {
     label: 'Food near you (Wolt)',
     steps: [
-      { text: 'On Food Promotions the visitor shares their location. The browser sends it to the API server, not to Wolt.', flows: { visit: 2, miss: 2 }, load: { cdn: 0.15, app: 0.3 } },
+      { text: 'On Food the visitor shares their location. The browser sends it to the API server, not to Wolt.', flows: { visit: 2, miss: 2 }, load: { cdn: 0.15, app: 0.3 } },
       { text: 'The server opens wolt.com in a headless browser at that spot and reads the restaurants’ offers. This takes a few seconds.', flows: { miss: 1, wolt: 3 }, load: { app: 0.65, wolt: 0.6 } },
       { text: 'The offers are cached for that area (about 1 km), so the next visitor nearby gets them at once, without opening Wolt again.', flows: { wolt: 1, miss: 2, db: 1 }, load: { app: 0.3, cache: 0.35, wolt: 0.2, neon: 0.15 } },
     ],

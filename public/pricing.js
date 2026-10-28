@@ -105,7 +105,7 @@ function render() {
       <p><b>What you pay for:</b> only the AI features: photo checks in <a href="/follow" data-view-link>Follow your discount</a>
         and questions to the deals assistant (the chat button at the bottom-right). Each runs a paid AI service, and checks cover that cost.
         A question uses a check only when it finds deals.</p>
-      <p><b>Everything else is free:</b> Market, Cloth, Electronics and Food Promotions, Favorites and the
+      <p><b>Everything else is free:</b> the Supermarkets, Clothes, Electronics, Beauty &amp; Health and Food sections, Favorites and the
         Dashboard are collected automatically by our own crawlers, so there's nothing to charge. No checks,
         and no account needed.</p>
     </div>

@@ -466,7 +466,7 @@ app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics',
 // `sectionSchedules` run on their own cron; the main schedule refreshes every other store. The
 // first start still crawls everything, and the cooldown only limits clicks.
 const ownSchedule = Object.fromEntries(Object.entries(config.sectionSchedules ?? {}).filter(([, expr]) => expr));
-const SECTION_NAMES = { groceries: 'Market Promotions', clothing: 'Cloth Promotions', electronics: 'Electronics Promotions', beauty: 'Beauty & Health Promotions', food: 'Food Promotions' };
+const SECTION_NAMES = { groceries: 'Supermarkets', clothing: 'Clothes', electronics: 'Electronics', beauty: 'Beauty & Health', food: 'Food' };
 const schedules = [
   { label: Object.keys(ownSchedule).length ? 'Other sections' : null, cron: config.schedule, stores: () => crawlableStores().filter((k) => !ownSchedule[segmentOf(k)]) },
   ...Object.entries(ownSchedule).map(([seg, expr]) => ({ label: SECTION_NAMES[seg] ?? seg, cron: expr, stores: () => crawlableStores().filter((k) => segmentOf(k) === seg) })),
