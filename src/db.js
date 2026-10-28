@@ -72,7 +72,10 @@ export async function hit(key, windowMs) {
 
 // ── Key/value documents (src/store.js when DATA_STORE=postgres) ─────────────────────────────────
 let ready = null;
-export const ensureDb = () => (ready ??= initDb().catch((e) => ((ready = null), Promise.reject(e))));
+export const ensureDb = () =>
+  pool
+    ? (ready ??= initDb().catch((e) => ((ready = null), Promise.reject(e))))
+    : Promise.reject(new Error('DATABASE_URL is not set (needed when DATA_STORE=postgres)'));
 
 export async function kvGet(key) {
   await ensureDb();
