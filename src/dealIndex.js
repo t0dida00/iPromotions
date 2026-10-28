@@ -43,7 +43,7 @@ export const TOPICS = {
   frozen: { label: 'ready meals and frozen food', test: (d) => d.group === 'Ready meals & frozen' },
   snacks: { label: 'sweets, chocolate, chips, snacks', test: (d) => d.group === 'Sweets & snacks' },
   pantry: { label: 'pasta, rice, sauces, canned and other dry food', test: (d) => d.group === 'Pantry & other food' },
-  restaurants: { label: 'fast food and restaurant offers (Hesburger, Burger King, Wolt restaurants)', test: isRestaurant },
+  restaurants: { label: 'fast food, pizza and restaurant offers (Hesburger, Burger King, Kotipizza, Classic Pizza, Taco Bell, Rax, Wolt restaurants)', test: isRestaurant },
   home: { label: 'home, decor, kitchenware', test: (d) => d.group === 'Home & decor' },
   cleaning: { label: 'cleaning and household supplies', test: (d) => d.group === 'Cleaning & household' },
   beauty: { label: 'beauty, health, cosmetics, personal care, pharmacy, vitamins', test: (d) => d.segment === 'beauty' || d.group === 'Beauty & health' || d.group === 'Personal care' },

@@ -16,6 +16,8 @@ import { crawlVerkkokauppa } from './crawlers/verkkokauppa.js';
 import { crawlGigantti } from './crawlers/gigantti.js';
 import { crawlHesburger } from './crawlers/hesburger.js';
 import { crawlBurgerKing } from './crawlers/burgerking.js';
+import { crawlRestel } from './crawlers/restel.js';
+import { crawlKotipizza } from './crawlers/kotipizza.js';
 import { crawlKicks } from './crawlers/kicks.js';
 import { crawlYa } from './crawlers/ya.js';
 import { unifyCategory } from './categories.js';
@@ -36,6 +38,8 @@ const CRAWLERS = {
   gigantti: crawlGigantti,
   hesburger: crawlHesburger,
   burgerking: crawlBurgerKing,
+  restel: crawlRestel,
+  kotipizza: crawlKotipizza,
   kicks: crawlKicks,
   ya: crawlYa,
 };

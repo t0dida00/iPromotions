@@ -90,6 +90,10 @@ persistida `QUERY_HASH`, que hay que actualizar si S-kaupat la cambia) o Playwri
 de `src/browser.js`, que normalmente intercepta las llamadas a la API interna de la propia web en vez
 de parsear el DOM (K-Ruoka, Power, Verkkokauppa, Gigantti, XXL) o pulsa "cargar más" (Intersport, Stadium). Reutiliza `USER_AGENT`, `sleep` y
 `declineCookies` de `src/browser.js`. Política del proyecto: no intentar saltarse protecciones anti-bot.
+Comida: Hesburger, Burger King y `restel` (Classic Pizza, Taco Bell y Rax comparten tema WordPress; `url` = página
+con los bloques) pasan texto al analista (`src/analyst.js`); `kotipizza` lee con Playwright los datos de la portada
+que carga la propia web y los cupones (precio + "norm.") de cada página de campaña. Pizza Hut (solo imágenes),
+KFC (sin local en Oulu), Rolls y ResQ Club (solo app) quedan fuera o como enlace.
 
 **Categorías (`src/categories.js`):** listas de reglas regex por segmento (`RULES`,
 `CLOTHING_RULES`, `ELECTRONICS_RULES`, `FOOD_RULES`, `BEAUTY_RULES`); gana la primera que coincide, así que el orden importa

@@ -61,6 +61,8 @@ const ELECTRONICS_RULES = [
 // Fast-food chains: tested against the offer's label and name (e.g. "Lounastarjous Lounas tulille").
 const FOOD_RULES = [
   ['Lunch deals', /lounas|lunch/i],
+  // Pizza before meals: "pizza + juoma" is still a pizza deal.
+  ['Pizza', /pizz|pitsa/i],
   ['Meals & combos', /ateria|kombo|combo|meal|menu|\+/i],
   // Chicken and burgers before vegetarian: "juustokasvisateria"-style names are meals anyway.
   ['Chicken', /kana|chicken|nugget|wings|siive/i],

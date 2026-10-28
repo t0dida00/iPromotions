@@ -11,7 +11,7 @@ import { DATA_DIR, readJson, writeJson } from './store.js';
 // data/analyst-cache.json, so unchanged banners never call the model again.
 const API = 'https://router.huggingface.co/v1/chat/completions';
 const CACHE_FILE = path.join(DATA_DIR, 'analyst-cache.json');
-const CATEGORIES = ['Burgers', 'Chicken', 'Meals & combos', 'Lunch deals', 'Vegetarian', 'Desserts & ice cream', 'Sides & dips', 'Drinks', 'Wraps & subs', 'Other offers'];
+const CATEGORIES = ['Burgers', 'Chicken', 'Pizza', 'Meals & combos', 'Lunch deals', 'Vegetarian', 'Desserts & ice cream', 'Sides & dips', 'Drinks', 'Wraps & subs', 'Other offers'];
 
 const SYSTEM = `You analyse fast-food marketing banners from Finnish restaurant websites.
 For each banner you get the text found around it (Finnish). Decide whether it advertises a
@@ -32,7 +32,7 @@ offers, leave price, regularPrice and discountPct null and explain the freebie i
 Only state prices and dates that appear in the text; never invent them. Today is {TODAY}.`;
 
 // Bump when SYSTEM changes so cached analyses are redone with the new instructions.
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 3;
 
 export const analystEnabled = () => Boolean(process.env.NUXT_HF_TOKEN);
 

@@ -16,7 +16,7 @@ Node.js (ESM) · Express 5 · Playwright · cheerio · PostgreSQL. No build step
 | **/clothing** | Sale clothing and shoes: XXL, Intersport, Stadium, KappAhl and New Yorker; sale-page links for H&M and Lindex |
 | **/electronics** | Campaign and clearance deals: Power, Verkkokauppa.com and Gigantti |
 | **/beauty** | Beauty & Health: KICKS offers, Yliopiston Apteekki member prices and outlet |
-| **/food** | Hesburger and Burger King campaigns (read by the campaign analyst), live Wolt offers near you, links to McDonald's and Subway |
+| **/food** | Hesburger, Burger King, Classic Pizza, Taco Bell, Rax and Kotipizza campaigns (read by the campaign analyst; Kotipizza's app coupons with prices), live Wolt offers near you, links to Pizza Hut, McDonald's and Subway |
 | **/favorites** | Deals from every starred (☆) category across sections |
 | **/shared** | *Shared by buddy*: deals people spotted in Oulu shops and shared (posting needs a login; posts disappear when they end) |
 | **/follow** | *Follow your discount* (signed in): photograph labels and the use-by / best-before dates go on a calendar |
@@ -155,6 +155,8 @@ runs, the site shows the progress too; a store that fails keeps its previous dea
 | KICKS | Plain HTTP over `/tarjouksessa-nyt?pagesize=180&page=N`, the product list's React props embedded in the page |
 | Yliopiston Apteekki | Plain HTTP + cheerio over the member-offer and outlet lists (Magento, `?p=N`) |
 | Hesburger, Burger King | Plain HTTP: homepage campaign banners and offer pages, read by the campaign analyst |
+| Classic Pizza, Taco Bell, Rax | Plain HTTP (`restel`, one crawler for Restel's shared site theme): campaign blocks, read by the campaign analyst |
+| Kotipizza | Playwright: the homepage's own CMS data (hero campaigns, picked cards) and each campaign page's coupon cards (price + normal price); cards without prices go to the campaign analyst |
 | Wolt (live) | Not crawled: when Food opens, the browser's location (rounded to ~1 km) goes to `GET /api/wolt`, and headless Chromium reads wolt.com's "Offers near you" as a logged-out visitor. Without a location: Oulu city center |
 
 - Stores are crawled in parallel (`concurrency`), so a refresh takes about as long as the slowest
