@@ -106,7 +106,7 @@ The schema is in `src/db/schema.sql` and is applied on start (idempotent).
 | --- | --- | --- |
 | Website + API | **Vercel**, region `fra1` | `public/` from the CDN; `/api/*` is the Express app as one function (`api/index.js`, `vercel.json`) |
 | Database | **Neon** Postgres (Vercel Marketplace, Frankfurt) | Pooled `DATABASE_URL` |
-| Crawling | Vercel functions | Only when the owner presses Refresh: one function call per store, 2 at a time (`src/crawlQueue.js`), each cut off at 300 s |
+| Crawling | **The owner's computer** | `npm run start:sync` + Refresh on localhost writes to Neon; the online site has no Refresh |
 | Wolt lookups | Vercel function | Chromium from `@sparticuz/chromium`; ~50 s for a new area, then cached per ~1 km area for 6 hours in the database |
 
 One-time setup:
@@ -117,16 +117,21 @@ One-time setup:
 4. **Firebase console → Authentication → Settings → Authorized domains**: add the Vercel domain.
 5. Optional: copy local data in with `vercel env pull .env.production.local` and
    `node --env-file=.env.production.local scripts/import-data.js`.
-6. Sign in as the owner, press **Refresh all**, then open `/api/health`. It should
+6. Create `.env.sync` (see `.env.example`), run `npm run start:sync`, sign in as the owner on
+   http://localhost:3000 and press **Refresh all**, then open `/api/health` on the site. It should
    return `{"ok":true,"db":true,"lastCrawl":…}`, or 503 if the database is unreachable.
 
-Online, a Refresh click saves the stores to crawl in the database and starts two of them, each in
-its own function call. The page's polling starts the next store whenever one finishes (Vercel
-blocks chains of functions calling each other), so **keep the page open** until the refresh ends;
-a full refresh takes about 10 minutes. The buttons show "Refreshing…" meanwhile, and a store that
-fails (or runs past 270 s) keeps its previous deals. Some stores block data-centre addresses, so
-they may only refresh from a home connection: `DATA_STORE=postgres npm run crawl` with the online
-`DATABASE_URL` writes straight to the site's database.
+The online site doesn't crawl: several stores (Stadium, Gigantti, K-Ruoka…) block data-centre
+servers, Vercel's included. The owner refreshes from their own computer instead:
+
+```bash
+npm run start:sync           # localhost with the online data; Refresh buttons write to Neon
+npm run crawl:sync           # the same from the terminal (all stores, or -- --segment food)
+npm run clear:sync -- --yes  # delete the online deals, status and history (backup in data/)
+```
+
+`.env.sync` holds `DATA_STORE=postgres` and the online `DATABASE_URL`, on top of `.env`. While it
+runs, the site shows the progress too; a store that fails keeps its previous deals.
 
 ## How the stores are read
 

@@ -15,6 +15,7 @@ Sin build, sin bundler, sin framework de frontend. El código, los comentarios y
 ```bash
 npm install        # postinstall descarga Chromium headless (playwright install chromium)
 npm start          # servidor en http://localhost:3000; crawl al arrancar si no hay datos, luego con Refresh
+npm run start:sync # igual, pero con los datos online (Neon, .env.sync): así se refresca la web
 npm run crawl      # crawl puntual de todas las tiendas desde la terminal
 ```
 
@@ -59,21 +60,17 @@ cuentas y el owner se deduce del token.
 
 **Despliegue online (gratis):** Vercel (estático `public/` + `api/index.js`, que importa `app` de
 `src/server.js`; con `VERCEL` no hay `listen`, ni cron real, ni crawl al arrancar) y Neon (Postgres).
-Sin GitHub Actions: el botón Refresh del owner en Vercel crawlea en las propias funciones
-(`src/crawlQueue.js`): `startQueue()` guarda la cola en `crawl-progress.json` (`pending`, `running`,
-`token` aleatorio, `origin`) y lanza `LANES` (2) tiendas; cada una es una llamada a
-`POST /api/crawl/store` (solo con el `token` de la ejecución; responde 202 y crawlea en `waitUntil`,
-corte a los 270 s, `maxDuration` 300 en `vercel.json`) que al terminar guarda su tienda en la sección
-bajo un lock de Postgres (`withLock` de `src/db.js`, advisory lock). La siguiente tienda **no** la lanza
-la anterior (Vercel corta las cadenas de funciones que se llaman entre sí con 508
-INFINITE_LOOP_DETECTED tras ~4 saltos): la lanza `pumpQueue()` desde el polling de `/api/meta` y
-`/api/status`, así que la página debe seguir abierta durante el Refresh. Una tienda sin respuesta tras
-330 s cuenta como fallida; la última tienda añade la ejecución al historial. `currentProgress()` no
-expone `pending`/`token`/`origin`. En
+**En Vercel no se crawlea** (varias tiendas bloquean sus servidores): `/api/meta` devuelve
+`refresh: false`, `app.js` pone `html.no-refresh` y el CSS oculta los botones Refresh; `POST /api/crawl`
+responde 404. El owner refresca desde su ordenador con `npm run start:sync` (`.env.sync` con
+`DATA_STORE=postgres` y el `DATABASE_URL` de Neon, encima de `.env`): los botones Refresh de
+localhost escriben en Neon y la web los ve (también el progreso, vía `crawl-progress.json`).
+`npm run crawl:sync` hace lo mismo desde la terminal y `npm run clear:sync -- --yes`
+(`scripts/clear-crawl-data.js`) borra los deals, `status.json` y el progreso online, con copia en
+`data/backup-crawl-*.json`. En
 Vercel Chromium viene de `@sparticuz/chromium` (`src/browser.js`, usa `playwright-core`). Región
 `fra1` (`vercel.json`, junto a Neon en Frankfurt). `npm run crawl` sale con código 1 si falla
-alguna tienda; con `DATA_STORE=postgres` y el `DATABASE_URL` de Neon escribe en la base de datos online
-(útil para las tiendas que bloquean IPs de centros de datos, como Stadium).
+alguna tienda.
 `scripts/import-data.js` copia `data/*.json` a la tabla `kv` (y `expiry.json` a `expiry_entries`).
 
 **Almacenamiento (`src/store.js`):** con `DATA_STORE=postgres` (Vercel) cada

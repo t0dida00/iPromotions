@@ -316,6 +316,8 @@ html:not(.is-owner) .err-details { display: none; }
 
 /* Refresh buttons are for owners only (html.is-owner, set by auth.js); the server enforces it too. */
 html:not(.is-owner) .crawl-btn, html:not(.is-owner) [data-refresh-seg] { display: none; }
+/* Online the site doesn't crawl (html.no-refresh, set by app.js from /api/meta): no Refresh at all. */
+html.no-refresh .crawl-btn, html.no-refresh [data-refresh-seg] { display: none; }
 
 /* Favorites */
 .favs-tools { padding-top: 12px; }

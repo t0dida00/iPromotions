@@ -12,8 +12,6 @@ import { rateLimit } from './rateLimit.js';
 import { authRouter, requireOwner, requireUser, isOwner } from './auth.js';
 import { favoritesRouter } from './favorites.js';
 import { initDb, ensureDb, dbEnabled, hit, query } from './db.js';
-import { startQueue, pumpQueue, acceptStore, runStore } from './crawlQueue.js';
-import { waitUntil } from '@vercel/functions';
 import { scanEnabled, scanLabel, listEntries, entryFrom, addEntry, changeEntry, removeEntry } from './expiry.js';
 import { woltOffers, cachedOffers } from './wolt.js';
 import { getCredits, reserve, settle } from './credits.js';
@@ -29,8 +27,8 @@ const startedAt = new Date().toISOString();
 const COOLDOWN_MS = (config.refreshCooldownMinutes ?? 10) * 60_000;
 
 // Locally this file is the server (listen, cron, startup crawl). On Vercel, api/index.js imports
-// `app` and Vercel runs it as a function: no listen, and each store is crawled by its own function
-// call (src/crawlQueue.js).
+// `app` and Vercel runs it as a function: no listen and no crawling. Refreshes run only on the
+// owner's computer (`npm run start:sync`), which writes the deals to the same database.
 const ON_VERCEL = Boolean(process.env.VERCEL);
 
 export const app = express();
@@ -57,14 +55,6 @@ app.get('/api/health', async (_req, res) => {
   if (dbEnabled()) db = await query('select 1').then(() => true, () => false);
   const lastCrawl = db === false ? null : (await readStatus()).updatedAt;
   res.status(db === false ? 503 : 200).json({ ok: db !== false, db, lastCrawl });
-});
-// One store of an online Refresh (src/crawlQueue.js), called by our own functions with the run's
-// token. Answers at once and crawls in the background; no rate limit (all calls come from Vercel).
-app.post('/api/crawl/store', express.json({ limit: '1kb' }), async (req, res) => {
-  const { key, token } = req.body ?? {};
-  if (!ON_VERCEL || !(await acceptStore(key, token))) return res.status(403).json({ error: 'Not allowed' });
-  res.status(202).json({ crawling: key });
-  waitUntil(runStore(key, token).catch((e) => console.error(`[crawl] ${key}:`, e)));
 });
 // Stripe → us (src/billing.js): raw body for the signature check, and no rate limit (Stripe retries).
 app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }), stripeWebhook);
@@ -111,12 +101,8 @@ const storeList = () =>
       hasDeals: Boolean(s.type),
     }));
 
-// Online, the pages' polling is what starts the next store of a Refresh (see src/crawlQueue.js);
-// in the background, so the reply isn't delayed.
-const pump = (p) => ON_VERCEL && p && waitUntil(pumpQueue(p).catch((e) => console.error('[crawl] queue:', e.message)));
-
 // `crawling` is false, or the stores in the current run (plus any queued ones). The run may be in
-// this process or, online, in the Vercel functions (src/crawl.js currentProgress).
+// this process or, online, on the owner's computer (src/crawl.js currentProgress).
 const crawlingInfo = (p) => (p ? { scope: [...new Set([...(p.scope ?? []), ...(p.queued ?? [])])], running: p.running ?? [], done: p.done ?? [] } : false);
 
 // When each store may be refreshed again by hand (null = now).
@@ -137,7 +123,6 @@ const statusFor = (sources, owner) => (owner ? sources : Object.fromEntries(Obje
 // Small, frequently polled: stores, their status, per-section update times and refresh state.
 app.get('/api/meta', async (req, res) => {
   const [status, p, owner] = await Promise.all([sharedStatus(), sharedProgress(), isOwner(req)]);
-  pump(p);
   // Every open tab polls this (every minute, every 3 s during a refresh). Visitors without a sign-in
   // all get the same answer, so the CDN may reuse it for 5 s; the owner's (with crawler errors) is
   // never cached.
@@ -151,6 +136,7 @@ app.get('/api/meta', async (req, res) => {
     cooldownUntil: cooldowns(status.sources),
     cooldownMinutes: COOLDOWN_MS / 60_000,
     schedule: config.schedule,
+    refresh: !ON_VERCEL, // false: the page hides its Refresh buttons
   });
 });
 
@@ -233,7 +219,6 @@ app.get('/api/stores/top', async (req, res) => {
 // Everything the dashboard shows; read from status.json only, no deal files.
 app.get('/api/status', async (req, res) => {
   const [{ updatedAt, sources, runs = [] }, p, owner] = await Promise.all([sharedStatus(), sharedProgress(), isOwner(req)]);
-  pump(p);
   const until = cooldowns(sources);
   res.json({
     server: { startedAt, now: new Date().toISOString(), node: process.version },
@@ -259,7 +244,10 @@ app.get('/api/status', async (req, res) => {
 // refreshed successfully in the last `refreshCooldownMinutes` is skipped. If nothing is left to
 // do, the reply is 429 with the time the earliest store becomes available.
 // Owner only (role in the users table, see OWNER_EMAIL); the weekly schedule doesn't go through here.
+// Not online: Vercel's servers are blocked by several stores, so the owner refreshes from their own
+// computer (`npm run start:sync`) and the deals reach the site through the shared database.
 app.post('/api/crawl', requireOwner, crawlLimit, async (req, res) => {
+  if (ON_VERCEL) return res.status(404).json({ error: 'Refreshes run on the owner\'s computer, not online.' });
   // Only `segment` is accepted; anything else (e.g. the old `?store=`) is an error, not "refresh all".
   const extra = Object.keys(req.query).filter((k) => k !== 'segment');
   if (extra.length) return res.status(400).json({ error: `Unsupported parameter: ${extra.join(', ')}` });
@@ -279,16 +267,6 @@ app.post('/api/crawl', requireOwner, crawlLimit, async (req, res) => {
     return res.status(429).json({ error: 'Already refreshing or refreshed recently', availableAt: next, skipped });
   }
   const queued = Boolean(p);
-  if (ON_VERCEL) {
-    // Online every store is crawled by its own function call, a few at a time (src/crawlQueue.js).
-    try {
-      const run = await startQueue(start, 'manual', `${req.protocol}://${req.get('host')}`);
-      return res.status(202).json({ crawling: true, queued: run.queued, stores: start, skipped });
-    } catch (e) {
-      console.error('[crawl] could not start:', e.message);
-      return res.status(502).json({ error: "Couldn't start the refresh right now. Please try again in a moment." });
-    }
-  }
   crawlAll(console.log, 'manual', start).catch((e) => console.error('[crawl]', e));
   res.status(202).json({ crawling: true, queued, stores: start, skipped });
 });
