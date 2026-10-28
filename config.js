@@ -85,8 +85,11 @@ export default {
       brochureUrl: 'https://www.tokmanni.fi/tarjouslehti',
     },
     // K-Ruoka flyers: change ?kauppa= to switch branch (K-Market is intentionally not included).
+    // Link only for now: k-ruoka.fi answers crawlers with a Cloudflare challenge, which we don't try
+    // to get around. type: 'kruoka' (src/crawlers/kruoka.js) crawls them again if that changes, or
+    // a Kesko API (developer.kesko.fi) may replace it.
     ksupermarket: {
-      type: 'kruoka',
+      type: null,
       enabled: true,
       name: 'K-Supermarket',
       label: 'K-Supermarket Kaijonharju',
@@ -96,7 +99,7 @@ export default {
       brochureUrl: 'https://www.k-ruoka.fi/k-supermarket/tarjouslehti?kauppa=k-supermarket-kaijonharju',
     },
     kcitymarket: {
-      type: 'kruoka',
+      type: null,
       enabled: true,
       name: 'K-Citymarket',
       label: 'K-Citymarket Raksila',
@@ -112,10 +115,9 @@ export default {
       label: 'Prisma Linnanmaa',
       color: '#00843d',
       logo: '/logos/prisma.svg',
-      // Typed into S-kaupat's "Toimitustapa" search, then the pickup point whose name contains it
-      // is chosen. Any S-group store works (Prisma, S-market, Sale…):
-      // see https://www.s-kaupat.fi/myymalat/prisma
-      search: 'Prisma Linnanmaa',
+      // S-group store id (Prisma Linnanmaa). Any S-group store works (Prisma, S-market, Sale…):
+      // choose it on s-kaupat.fi and read the `s-kaupat-selected-store` cookie.
+      storeId: '603116906',
       // Prisma has no public weekly flyer page; S-kaupat's campaign page is the closest equivalent.
       brochureUrl: 'https://www.s-kaupat.fi/tuotteet/kampanjat',
     },
