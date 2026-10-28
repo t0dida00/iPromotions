@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Page not found · iPromotion</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="theme-color" content="#0f7b5f" />
+  <!-- Shown for any address the site doesn't have: by Vercel online (404.html in the output
+       directory) and by src/server.js locally. Self-contained, so it works even if style.css changes. -->
+  <style>
+    :root { --bg: #f3ecdd; --surface: #fffaf1; --text: #2a2620; --muted: #776f62; --line: #e2d8c4; --accent: #0f7b5f; --sale: #c62f52; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); color: var(--text); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    main { width: min(560px, 100%); text-align: center; }
+    .brand { display: flex; width: fit-content; margin: 0 auto; align-items: center; gap: 10px; color: inherit; text-decoration: none; font-weight: 700; font-size: 18px; }
+    .brand img { width: 34px; height: 34px; }
+    .brand-i { color: var(--accent); }
+
+    /* A shelf price tag: "was 200 OK, now 404". */
+    .tag { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; margin: 36px 0 26px; padding: 18px 30px 20px 42px; background: var(--surface); border: 2px solid var(--sale); border-radius: 14px 26px 26px 14px; transform: rotate(-4deg); box-shadow: 0 10px 30px rgb(42 38 32 / 0.12); }
+    .tag::before { content: ''; position: absolute; left: 14px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--bg); border: 2px solid var(--sale); }
+    .tag .was { color: var(--muted); font-size: 15px; text-decoration: line-through; }
+    .tag .now { color: var(--sale); font-size: 64px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+    .tag .stamp { position: absolute; top: -12px; right: -14px; padding: 3px 10px; border-radius: 999px; background: var(--sale); color: #fff; font-size: 12px; font-weight: 700; transform: rotate(8deg); }
+
+    h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; letter-spacing: -0.01em; }
+    p { margin: 0 0 6px; color: var(--muted); }
+    .path { display: inline-block; max-width: 100%; margin-top: 4px; padding: 2px 8px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); color: var(--text); font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 24px 0 28px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+    .btn[hidden] { display: none; }
+    .btn:hover { border-color: var(--accent); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { filter: brightness(1.08); }
+    nav h2 { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    nav ul { list-style: none; margin: 0; padding: 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+    nav a { display: inline-block; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); text-decoration: none; font-size: 14px; }
+    nav a:hover { border-color: var(--accent); color: var(--accent); }
+    @media (max-width: 480px) {
+      .tag .now { font-size: 52px; }
+      h1 { font-size: 22px; }
+      .actions .btn { flex: 1 1 100%; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .tag { animation: swing 1.4s ease-out both; transform-origin: 20px 50%; }
+      @keyframes swing { 0% { transform: rotate(-16deg); } 40% { transform: rotate(2deg); } 70% { transform: rotate(-6deg); } 100% { transform: rotate(-4deg); } }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="brand" href="/"><img src="/logo.svg" alt="" /><span><span class="brand-i">i</span>Promotion</span></a>
+
+    <div class="tag" aria-hidden="true">
+      <span class="stamp">Sold out</span>
+      <span class="was">was 200 OK</span>
+      <span class="now">404</span>
+    </div>
+
+    <h1>This page is sold out</h1>
+    <p>We couldn't find what you were looking for. The link may be old, or the address has a typo.</p>
+    <p><span class="path" id="path"></span></p>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="/promotions">Go to Supermarkets</a>
+      <button class="btn" type="button" id="back" hidden>Go back</button>
+    </div>
+
+    <nav aria-label="Sections">
+      <h2>Or browse</h2>
+      <ul>
+        <li><a href="/clothing">Clothes</a></li>
+        <li><a href="/electronics">Electronics</a></li>
+        <li><a href="/beauty">Beauty &amp; Health</a></li>
+        <li><a href="/food">Food</a></li>
+        <li><a href="/shared">Shared by buddy</a></li>
+        <li><a href="/favorites">Favorites</a></li>
+      </ul>
+    </nav>
+  </main>
+  <script>
+    // The address that wasn't found (as text, never as HTML), and "Go back" when there is a page to go back to.
+    document.getElementById('path').textContent = decodeURI(location.pathname + location.search).slice(0, 200);
+    const back = document.getElementById('back');
+    if (history.length > 1 && document.referrer.startsWith(location.origin)) {
+      back.hidden = false;
+      back.addEventListener('click', () => history.back());
+    }
+  </script>
+</body>
+</html>

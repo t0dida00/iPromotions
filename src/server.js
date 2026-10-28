@@ -464,6 +464,11 @@ app.delete('/api/expiry/:id', requireUser, async (req, res) => {
 // Sidebar sections are real URLs; they all load the same page, which shows the matching section.
 app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/beauty', '/food', '/follow', '/shared', '/how-it-works', '/privacy', '/terms', '/contact', '/pricing'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
+// Anything else: a JSON error for API calls, the friendly 404 page for people (Vercel serves the
+// same public/404.html online).
+app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
+app.use((_req, res) => res.status(404).sendFile(path.join(PUBLIC, '404.html')));
+
 // Scheduled refreshes, off unless set in config.js (the owner refreshes by hand): sections in
 // `sectionSchedules` run on their own cron; the main schedule refreshes every other store. The
 // first start still crawls everything, and the cooldown only limits clicks.
