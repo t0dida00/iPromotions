@@ -12,7 +12,7 @@ Node.js (ESM) · Express 5 · Playwright · cheerio · PostgreSQL. No build step
 
 | Page | What it shows |
 | --- | --- |
-| **/promotions** (also `/`) | Groceries: Tokmanni, Prisma and Lidl, plus links to each store's weekly brochure (K-Supermarket and K-Citymarket are links only) |
+| **/promotions** (also `/`) | Groceries: Tokmanni, K-Supermarket, K-Citymarket, Prisma and Lidl, plus links to each store's weekly brochure |
 | **/clothing** | Sale clothing and shoes: XXL, Intersport, Stadium, KappAhl and New Yorker; sale-page links for H&M and Lindex |
 | **/electronics** | Campaign and clearance deals: Power, Verkkokauppa.com and Gigantti |
 | **/food** | Hesburger and Burger King campaigns (read by the campaign analyst), live Wolt offers near you, links to McDonald's and Subway |
@@ -139,7 +139,7 @@ runs, the site shows the progress too; a store that fails keeps its previous dea
 | Store | Method |
 | --- | --- |
 | Tokmanni | Plain HTTP + cheerio over `/viikkotarjoukset/<category>?p=N` |
-| K-Supermarket / K-Citymarket | Link to the flyer only: k-ruoka.fi answers crawlers with a Cloudflare challenge (the old crawler, `src/crawlers/kruoka.js`, is kept) |
+| K-Supermarket / K-Citymarket | Headless Chromium loads the flyer and captures `/kr-api/raw-offer/product-map`; works from a home connection, but K-Ruoka sometimes answers with a Cloudflare challenge (the store then keeps its previous deals) |
 | Prisma | Plain HTTP: S-kaupat's GraphQL API (`RemoteFilteredProducts`, discounted products of one `storeId`) |
 | Lidl | Plain HTTP: this week's campaign pages, product JSON in `data-grid-data` |
 | XXL | Headless Chromium on `/kampanjat`, pages through its product search; clothing and shoes only |

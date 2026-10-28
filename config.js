@@ -85,11 +85,11 @@ export default {
       brochureUrl: 'https://www.tokmanni.fi/tarjouslehti',
     },
     // K-Ruoka flyers: change ?kauppa= to switch branch (K-Market is intentionally not included).
-    // Link only for now: k-ruoka.fi answers crawlers with a Cloudflare challenge, which we don't try
-    // to get around. type: 'kruoka' (src/crawlers/kruoka.js) crawls them again if that changes, or
-    // a Kesko API (developer.kesko.fi) may replace it.
+    // Crawled from the owner's computer only: k-ruoka.fi answers data-centre servers (and sometimes
+    // home connections too) with a Cloudflare challenge, which we don't try to get around. Then the
+    // crawl fails and the store keeps its previous deals.
     ksupermarket: {
-      type: null,
+      type: 'kruoka',
       enabled: true,
       name: 'K-Supermarket',
       label: 'K-Supermarket Kaijonharju',
@@ -99,7 +99,7 @@ export default {
       brochureUrl: 'https://www.k-ruoka.fi/k-supermarket/tarjouslehti?kauppa=k-supermarket-kaijonharju',
     },
     kcitymarket: {
-      type: null,
+      type: 'kruoka',
       enabled: true,
       name: 'K-Citymarket',
       label: 'K-Citymarket Raksila',
