@@ -99,9 +99,9 @@ const SCENARIOS = {
     ],
   },
   crawl: {
-    label: 'Weekly crawl',
+    label: 'Full crawl',
     steps: [
-      { text: 'Every Wednesday GitHub Actions crawls all stores; Food (Hesburger, Burger King) is crawled every morning at 09:00.', flows: {}, load: { crawler: 0.5 } },
+      { text: 'About once a week the owner presses Refresh all, which starts GitHub Actions on every store. Nothing runs on a schedule.', flows: {}, load: { crawler: 0.5 } },
       { text: 'The crawlers read 15 store websites, mostly by opening a real browser and listening to the site’s own deal API. H&M, Lindex, McDonald’s and Subway are links only.', flows: { fetch: 7 }, load: { crawler: 0.8, stores: 0.6 } },
       { text: 'The deals are written to Neon, one row per section. A store that fails keeps its previous deals and shows a ⚠ on its button.', flows: { fetch: 3, write: 5 }, load: { crawler: 0.55, stores: 0.3, neon: 0.5 } },
       { text: 'Within 5 seconds the API servers see the newer version and rebuild their memory once; the CDN has the new deals within a minute.', flows: { db: 2, miss: 1.5, visit: 3 }, load: { neon: 0.3, cache: 0.5, app: 0.25, cdn: 0.3 } },
@@ -110,9 +110,9 @@ const SCENARIOS = {
   refresh: {
     label: 'Owner presses Refresh',
     steps: [
-      { text: 'Only the owner sees Refresh. The API server checks their sign-in and role, and that the stores weren’t refreshed in the last 10 minutes.', flows: { visit: 1.5, miss: 1.5 }, load: { app: 0.3 } },
+      { text: 'Only the owner sees Refresh. The API server checks their sign-in and role, and skips stores that are already being refreshed.', flows: { visit: 1.5, miss: 1.5 }, load: { app: 0.3 } },
       { text: 'It doesn’t crawl itself (Vercel functions are short-lived): it asks GitHub to start the crawl workflow for that section.', flows: { refresh: 2.5 }, load: { app: 0.35, crawler: 0.55 } },
-      { text: 'The crawlers run as in the weekly crawl and save progress in Neon; the open page polls every 3 seconds and shows which store is being read.', flows: { fetch: 5, write: 3, miss: 2, db: 1.5 }, load: { crawler: 0.75, stores: 0.5, neon: 0.4, app: 0.25, cache: 0.3 } },
+      { text: 'The crawlers run as in the full refresh and save progress in Neon; the open page polls every 3 seconds and shows which store is being read.', flows: { fetch: 5, write: 3, miss: 2, db: 1.5 }, load: { crawler: 0.75, stores: 0.5, neon: 0.4, app: 0.25, cache: 0.3 } },
     ],
   },
 };
@@ -205,7 +205,7 @@ function build() {
     .map(([id, e]) => `<path class="how-edge${e.async ? ' async' : ''}" data-edge="${id}" d="${edgePath(e)}" marker-end="url(#how-arrow)"/>`)
     .join('');
   root.querySelector('.how-canvas').innerHTML = `<svg class="how-svg" viewBox="0 0 760 910" role="img" aria-labelledby="how-svg-title">
-    <title id="how-svg-title">Diagram: visitors sign in with Firebase and reach Vercel's CDN, which passes cache misses to the API server (auto-scaling, with an in-memory cache inside). The server checks Neon Postgres for changes and calls Hugging Face (assistant, photo dates) and Wolt (live offers). Crawlers on GitHub Actions, started on a schedule or by the owner's Refresh, read 15 store websites and write to Neon.</title>
+    <title id="how-svg-title">Diagram: visitors sign in with Firebase and reach Vercel's CDN, which passes cache misses to the API server (auto-scaling, with an in-memory cache inside). The server checks Neon Postgres for changes and calls Hugging Face (assistant, photo dates) and Wolt (live offers). Crawlers on GitHub Actions, started by the owner's Refresh, read 15 store websites and write to Neon.</title>
     <defs><marker id="how-arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M2 2 10 6 2 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
     <g class="how-edges">${edges}</g>
     <g class="how-tags"></g>
