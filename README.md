@@ -121,8 +121,9 @@ One-time setup:
    return `{"ok":true,"db":true,"lastCrawl":…}`, or 503 if the database is unreachable.
 
 Online, a Refresh click saves the stores to crawl in the database and starts two of them, each in
-its own function call; every store that finishes saves its deals and starts the next one, so a
-full refresh takes about 10 minutes. The buttons show "Refreshing…" meanwhile, and a store that
+its own function call. The page's polling starts the next store whenever one finishes (Vercel
+blocks chains of functions calling each other), so **keep the page open** until the refresh ends;
+a full refresh takes about 10 minutes. The buttons show "Refreshing…" meanwhile, and a store that
 fails (or runs past 270 s) keeps its previous deals. Some stores block data-centre addresses, so
 they may only refresh from a home connection: `DATA_STORE=postgres npm run crawl` with the online
 `DATABASE_URL` writes straight to the site's database.

@@ -12,7 +12,7 @@ import { rateLimit } from './rateLimit.js';
 import { authRouter, requireOwner, requireUser, isOwner } from './auth.js';
 import { favoritesRouter } from './favorites.js';
 import { initDb, ensureDb, dbEnabled, hit, query } from './db.js';
-import { startQueue, acceptStore, runStore } from './crawlQueue.js';
+import { startQueue, pumpQueue, acceptStore, runStore } from './crawlQueue.js';
 import { waitUntil } from '@vercel/functions';
 import { scanEnabled, scanLabel, listEntries, entryFrom, addEntry, changeEntry, removeEntry } from './expiry.js';
 import { woltOffers, cachedOffers } from './wolt.js';
@@ -111,6 +111,10 @@ const storeList = () =>
       hasDeals: Boolean(s.type),
     }));
 
+// Online, the pages' polling is what starts the next store of a Refresh (see src/crawlQueue.js);
+// in the background, so the reply isn't delayed.
+const pump = (p) => ON_VERCEL && p && waitUntil(pumpQueue(p).catch((e) => console.error('[crawl] queue:', e.message)));
+
 // `crawling` is false, or the stores in the current run (plus any queued ones). The run may be in
 // this process or, online, in the Vercel functions (src/crawl.js currentProgress).
 const crawlingInfo = (p) => (p ? { scope: [...new Set([...(p.scope ?? []), ...(p.queued ?? [])])], running: p.running ?? [], done: p.done ?? [] } : false);
@@ -133,6 +137,7 @@ const statusFor = (sources, owner) => (owner ? sources : Object.fromEntries(Obje
 // Small, frequently polled: stores, their status, per-section update times and refresh state.
 app.get('/api/meta', async (req, res) => {
   const [status, p, owner] = await Promise.all([sharedStatus(), sharedProgress(), isOwner(req)]);
+  pump(p);
   // Every open tab polls this (every minute, every 3 s during a refresh). Visitors without a sign-in
   // all get the same answer, so the CDN may reuse it for 5 s; the owner's (with crawler errors) is
   // never cached.
@@ -228,6 +233,7 @@ app.get('/api/stores/top', async (req, res) => {
 // Everything the dashboard shows; read from status.json only, no deal files.
 app.get('/api/status', async (req, res) => {
   const [{ updatedAt, sources, runs = [] }, p, owner] = await Promise.all([sharedStatus(), sharedProgress(), isOwner(req)]);
+  pump(p);
   const until = cooldowns(sources);
   res.json({
     server: { startedAt, now: new Date().toISOString(), node: process.version },
