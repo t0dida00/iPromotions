@@ -51,7 +51,6 @@ environment variables (`.env` locally, which is git-ignored; see `.env.example`)
 | `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID` | Sign in with Google (public web settings) |
 | `NUXT_HF_TOKEN`, `NUXT_HF_MODEL` | Hugging Face: campaign analyst for the Food section |
 | `NUXT_HF_VISION_MODEL` | Hugging Face vision model for *Follow your discount* (has a default) |
-| `GITHUB_TOKEN`, `GITHUB_REPO` | Online only: the Refresh button starts the GitHub Actions crawl |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PUBLIC_URL` | Payments for photo checks (`/pricing`); without them Buy is disabled |
 | `PORT`, `CRON_SCHEDULE`, `FOOD_CRON_SCHEDULE`, `CRAWL_CONCURRENCY`, `REFRESH_COOLDOWN_MINUTES` | Optional overrides |
 
@@ -101,33 +100,32 @@ The schema is in `src/db/schema.sql` and is applied on start (idempotent).
 | `purchases` | Paid Stripe Checkout sessions (one row each; makes the webhook safe to repeat) |
 | `kv` | Online only: one JSON document per former `data/` file (`deals-<section>.json`, `status.json`, caches, crawl progress) |
 
-## Deploy online (free tiers: Vercel + Neon + GitHub Actions)
+## Deploy online (free tiers: Vercel + Neon)
 
 | Part | Runs on | Notes |
 | --- | --- | --- |
 | Website + API | **Vercel**, region `fra1` | `public/` from the CDN; `/api/*` is the Express app as one function (`api/index.js`, `vercel.json`) |
 | Database | **Neon** Postgres (Vercel Marketplace, Frankfurt) | Pooled `DATABASE_URL` |
-| Crawling | **GitHub Actions** | `.github/workflows/crawl.yml`: only when the owner presses Refresh (or from the Actions tab) |
+| Crawling | Vercel functions | Only when the owner presses Refresh: one function call per store, 2 at a time (`src/crawlQueue.js`), each cut off at 300 s |
 | Wolt lookups | Vercel function | Chromium from `@sparticuz/chromium`; ~50 s for a new area, then cached per ~1 km area for 6 hours in the database |
 
 One-time setup:
 1. **Vercel**: import the repository (or `vercel link`).
 2. **Neon**: add it from the Vercel Marketplace (Storage → Neon, Frankfurt). It sets `DATABASE_URL`.
 3. **Vercel environment variables** (Production and Preview): `DATA_STORE=postgres`,
-   `OWNER_EMAIL` (mark it *sensitive*), the four `FIREBASE_*`, `NUXT_HF_TOKEN`, `NUXT_HF_MODEL`,
-   `GITHUB_REPO`, and `GITHUB_TOKEN` (fine-grained, this repository only, **Actions: Read and
-   write**).
-4. **GitHub → Settings → Secrets and variables → Actions**: `DATABASE_URL`, `NUXT_HF_TOKEN`,
-   `NUXT_HF_MODEL`.
-5. **Firebase console → Authentication → Settings → Authorized domains**: add the Vercel domain.
-6. Optional: copy local data in with `vercel env pull .env.production.local` and
+   `OWNER_EMAIL` (mark it *sensitive*), the four `FIREBASE_*`, `NUXT_HF_TOKEN`, `NUXT_HF_MODEL`.
+4. **Firebase console → Authentication → Settings → Authorized domains**: add the Vercel domain.
+5. Optional: copy local data in with `vercel env pull .env.production.local` and
    `node --env-file=.env.production.local scripts/import-data.js`.
-7. Run the "Crawl stores" workflow once from the Actions tab, then open `/api/health`. It should
+6. Sign in as the owner, press **Refresh all**, then open `/api/health`. It should
    return `{"ok":true,"db":true,"lastCrawl":…}`, or 503 if the database is unreachable.
 
-Online, a Refresh click starts the GitHub job (it starts in ~30 s; a full crawl takes a few minutes)
-and the buttons show "Refreshing…" meanwhile. A run where a store fails ends red, so GitHub emails
-you.
+Online, a Refresh click saves the stores to crawl in the database and starts two of them, each in
+its own function call; every store that finishes saves its deals and starts the next one, so a
+full refresh takes about 10 minutes. The buttons show "Refreshing…" meanwhile, and a store that
+fails (or runs past 270 s) keeps its previous deals. Some stores block data-centre addresses, so
+they may only refresh from a home connection: `DATA_STORE=postgres npm run crawl` with the online
+`DATABASE_URL` writes straight to the site's database.
 
 ## How the stores are read
 

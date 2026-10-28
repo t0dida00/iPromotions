@@ -43,20 +43,23 @@ let queued = null; // stores asked for while a crawl was running: null, 'all' or
 export const progress = { startedAt: null, trigger: null, scope: [], running: [], done: [], queued: [], sources: {} };
 const MAX_RUNS = 20;
 
-// Online the crawl runs on GitHub Actions while the site runs on Vercel, so the progress above is
-// also saved (DATA_STORE=postgres) for the site to read. A saved progress older than STALE_MS is
-// ignored (e.g. a job that was cancelled before it could clear it).
-const PROGRESS_FILE = path.join(DATA_DIR, 'crawl-progress.json');
-const STALE_MS = 45 * 60_000;
+// Online each store is crawled by its own Vercel function (src/crawlQueue.js), so the progress is
+// also saved (DATA_STORE=postgres) for every instance to read. A saved progress not updated for
+// STALE_MS is ignored (e.g. a function that was cut off before it could clear it).
+export const PROGRESS_FILE = path.join(DATA_DIR, 'crawl-progress.json');
+export const STALE_MS = 15 * 60_000;
 export const saveProgress = (extra = {}) =>
   useDb() ? writeJson(PROGRESS_FILE, { ...progress, active: true, savedAt: new Date().toISOString(), ...extra }).catch((e) => console.error('[crawl] progress:', e.message)) : Promise.resolve();
 
-// The crawl in progress, here or (online) on GitHub Actions; null when none.
+// The crawl in progress, in this process or (online) in the Vercel functions; null when none.
+// The queue's own fields (pending, token, origin) stay private.
 export async function currentProgress() {
   if (running) return { ...progress };
   if (!useDb()) return null;
   const saved = await readJson(PROGRESS_FILE, null);
-  return saved?.active && Date.now() - Date.parse(saved.savedAt) < STALE_MS ? saved : null;
+  if (!saved?.active || !(Date.now() - Date.parse(saved.savedAt) < STALE_MS)) return null;
+  const { pending: _p, token: _t, origin: _o, ...pub } = saved;
+  return pub;
 }
 
 // Stores that have a crawler (brochure-only stores don't).
@@ -103,41 +106,10 @@ export function crawlAll(log = console.log, trigger = 'cli', only = null) {
     const prevDeals = Object.fromEntries(await Promise.all(segments.map(async (s) => [s, (await readSegment(s)).deals])));
     const previous = (key) => prevDeals[segmentOf(key)].filter((d) => d.source === key);
 
-    async function crawlOne([key, opts]) {
-      const started = Date.now();
+    async function crawlOne([key]) {
       progress.running.push(key);
       saveProgress();
-      log(`[crawl] ${key}…`);
-      try {
-        // firstSeen: when this deal first showed up (kept from crawl to crawl), for the "New" badge.
-        // Deals already there before firstSeen existed keep null (not new), and so does a store's
-        // very first crawl, or every deal would look new.
-        const before = new Map(previous(key).map((d) => [d.id, d]));
-        const now = new Date().toISOString();
-        results[key] = (await CRAWLERS[opts.type](opts, log)).map((d) => {
-          const e = enrich(d, key, opts.segment);
-          const old = before.get(e.id);
-          return { ...e, firstSeen: old ? old.firstSeen ?? null : before.size ? now : null };
-        });
-        sources[key] = {
-          ok: true,
-          ...summarize(results[key]),
-          crawledAt: new Date().toISOString(),
-          durationMs: Date.now() - started,
-          error: null,
-        };
-        log(`[crawl] ${key}: ${results[key].length} deals in ${Math.round((Date.now() - started) / 1000)}s`);
-      } catch (err) {
-        results[key] = previous(key);
-        sources[key] = {
-          ...sources[key],
-          ok: false,
-          error: String(err.message ?? err),
-          failedAt: new Date().toISOString(),
-          durationMs: Date.now() - started,
-        };
-        log(`[crawl] ${key} FAILED: ${err.message} (kept ${results[key].length} previous deals)`);
-      }
+      ({ deals: results[key], source: sources[key] } = await crawlStore(key, previous(key), sources[key], log));
       progress.sources[key] = sources[key]; // shown on the dashboard before the run is saved
       progress.running = progress.running.filter((k) => k !== key);
       progress.done.push(key);
@@ -189,6 +161,43 @@ export function crawlAll(log = console.log, trigger = 'cli', only = null) {
 
 export const isCrawling = () => running !== null;
 
+// Crawls one store. `previous` are its current deals (kept if the crawl fails, and the source of
+// firstSeen) and `prevSource` its current status entry. Never throws: a failure is in `source`.
+// `timeoutMs` gives up on a crawl that would outlive its Vercel function.
+export async function crawlStore(key, previous, prevSource, log = console.log, timeoutMs = null) {
+  const opts = config.sources[key];
+  const started = Date.now();
+  log(`[crawl] ${key}…`);
+  try {
+    // firstSeen: when this deal first showed up (kept from crawl to crawl), for the "New" badge.
+    // Deals already there before firstSeen existed keep null (not new), and so does a store's
+    // very first crawl, or every deal would look new.
+    const before = new Map(previous.map((d) => [d.id, d]));
+    const now = new Date().toISOString();
+    let timer;
+    const crawl = CRAWLERS[opts.type](opts, log);
+    const raw = timeoutMs
+      ? await Promise.race([crawl, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(`Took longer than ${Math.round(timeoutMs / 1000)} s`)), timeoutMs)))]).finally(() => clearTimeout(timer))
+      : await crawl;
+    const deals = raw.map((d) => {
+      const e = enrich(d, key, opts.segment);
+      const old = before.get(e.id);
+      return { ...e, firstSeen: old ? old.firstSeen ?? null : before.size ? now : null };
+    });
+    log(`[crawl] ${key}: ${deals.length} deals in ${Math.round((Date.now() - started) / 1000)}s`);
+    return {
+      deals,
+      source: { ok: true, ...summarize(deals), crawledAt: new Date().toISOString(), durationMs: Date.now() - started, error: null },
+    };
+  } catch (err) {
+    log(`[crawl] ${key} FAILED: ${err.message} (kept ${previous.length} previous deals)`);
+    return {
+      deals: previous,
+      source: { ...prevSource, ok: false, error: String(err.message ?? err), failedAt: new Date().toISOString(), durationMs: Date.now() - started },
+    };
+  }
+}
+
 // Tags each deal with its config key, so two stores using the same crawler (K-Supermarket and
 // K-Citymarket) stay separate.
 function enrich(d, source, segment = 'groceries') {
@@ -211,7 +220,8 @@ function enrich(d, source, segment = 'groceries') {
   };
 }
 
-// `npm run crawl` — one-off crawl from the command line (also what GitHub Actions runs online).
+// `npm run crawl` — one-off crawl from the command line (with DATA_STORE=postgres it writes to the
+// online database).
 //   npm run crawl                                   every store
 //   npm run crawl -- --segment food,clothing        only those sections' stores
 //   npm run crawl -- --trigger schedule             recorded in the run history (default "cli")
@@ -227,14 +237,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { deals, failed } = status.runs[0];
   const where = useDb() ? 'to the database' : `to ${DATA_DIR}`;
   console.log(`Saved ${deals} deals ${where}`);
-  // A failed store keeps its previous deals, but exits non-zero so the run shows red, unless
-  // --skip-failed is given (GitHub Actions: then it is only a warning on the run). Errors that stop
-  // the whole crawl, such as the database being unreachable, still exit non-zero.
-  // Exiting also closes the database pool.
-  const skip = process.argv.includes('--skip-failed');
-  if (failed.length) {
-    const msg = `Failed: ${failed.join(', ')}`;
-    console.error(skip && process.env.GITHUB_ACTIONS ? `::warning title=Stores skipped::${msg}` : msg);
-  }
-  process.exit(failed.length && !skip ? 1 : 0);
+  // A failed store keeps its previous deals, but exits non-zero. Exiting also closes the database pool.
+  if (failed.length) console.error(`Failed: ${failed.join(', ')}`);
+  process.exit(failed.length ? 1 : 0);
 }
