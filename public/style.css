@@ -38,7 +38,7 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
 .nav-item:hover { background: rgb(255 255 255 / 0.5); }
 .nav-item[aria-current="page"] { background: var(--surface); color: var(--accent); font-weight: 650; box-shadow: 0 1px 2px rgb(60 45 20 / 0.08); }
 .nav-count { margin-left: auto; min-width: 20px; padding: 1px 7px; border-radius: 999px; background: #f6e3b4; color: #8a5a00; font-size: 12px; font-weight: 700; text-align: center; }
-.nav-count[hidden] { display: none; }
+.nav-count[hidden], .nav-extra[hidden] { display: none; }
 /* Bottom of the sidebar: collapses it to an icon rail (desktop only). */
 /* Icon only, padded like a nav item so its icon sits in the same column as the nav icons. */
 .collapse-btn { align-self: flex-start; display: grid; place-items: center; margin-top: -8px; padding: 9px 10px; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: pointer; }
