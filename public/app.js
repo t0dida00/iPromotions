@@ -528,6 +528,8 @@ async function load() {
   }
   META = await res.json();
   STORES = Object.fromEntries(META.stores.map((s) => [s.key, s]));
+  // Online there is no Refresh: the owner crawls on their own computer (see /api/meta `refresh`).
+  document.documentElement.classList.toggle('no-refresh', META.refresh === false);
   renderHeader();
   for (const v of views) v.renderLinks();
   // Only the section on screen loads (or re-checks) its deals; others wait until opened.

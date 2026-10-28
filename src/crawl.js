@@ -43,23 +43,20 @@ let queued = null; // stores asked for while a crawl was running: null, 'all' or
 export const progress = { startedAt: null, trigger: null, scope: [], running: [], done: [], queued: [], sources: {} };
 const MAX_RUNS = 20;
 
-// Online each store is crawled by its own Vercel function (src/crawlQueue.js), so the progress is
-// also saved (DATA_STORE=postgres) for every instance to read. A saved progress not updated for
-// STALE_MS is ignored (e.g. a function that was cut off before it could clear it).
-export const PROGRESS_FILE = path.join(DATA_DIR, 'crawl-progress.json');
-export const STALE_MS = 15 * 60_000;
+// The owner crawls on their own computer while the site runs on Vercel, so with DATA_STORE=postgres
+// the progress above is also saved for the site to read. A saved progress not updated for STALE_MS
+// is ignored (e.g. a crawl that was stopped before it could clear it).
+const PROGRESS_FILE = path.join(DATA_DIR, 'crawl-progress.json');
+const STALE_MS = 15 * 60_000;
 export const saveProgress = (extra = {}) =>
   useDb() ? writeJson(PROGRESS_FILE, { ...progress, active: true, savedAt: new Date().toISOString(), ...extra }).catch((e) => console.error('[crawl] progress:', e.message)) : Promise.resolve();
 
-// The crawl in progress, in this process or (online) in the Vercel functions; null when none.
-// The queue's own fields (pending, token, origin) stay private.
+// The crawl in progress, in this process or (online) on the owner's computer; null when none.
 export async function currentProgress() {
   if (running) return { ...progress };
   if (!useDb()) return null;
   const saved = await readJson(PROGRESS_FILE, null);
-  if (!saved?.active || !(Date.now() - Date.parse(saved.savedAt) < STALE_MS)) return null;
-  const { pending: _p, token: _t, origin: _o, ...pub } = saved;
-  return pub;
+  return saved?.active && Date.now() - Date.parse(saved.savedAt) < STALE_MS ? saved : null;
 }
 
 // Stores that have a crawler (brochure-only stores don't).
@@ -163,8 +160,7 @@ export const isCrawling = () => running !== null;
 
 // Crawls one store. `previous` are its current deals (kept if the crawl fails, and the source of
 // firstSeen) and `prevSource` its current status entry. Never throws: a failure is in `source`.
-// `timeoutMs` gives up on a crawl that would outlive its Vercel function.
-export async function crawlStore(key, previous, prevSource, log = console.log, timeoutMs = null) {
+async function crawlStore(key, previous, prevSource, log = console.log) {
   const opts = config.sources[key];
   const started = Date.now();
   log(`[crawl] ${key}…`);
@@ -174,12 +170,7 @@ export async function crawlStore(key, previous, prevSource, log = console.log, t
     // very first crawl, or every deal would look new.
     const before = new Map(previous.map((d) => [d.id, d]));
     const now = new Date().toISOString();
-    let timer;
-    const crawl = CRAWLERS[opts.type](opts, log);
-    const raw = timeoutMs
-      ? await Promise.race([crawl, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(`Took longer than ${Math.round(timeoutMs / 1000)} s`)), timeoutMs)))]).finally(() => clearTimeout(timer))
-      : await crawl;
-    const deals = raw.map((d) => {
+    const deals = (await CRAWLERS[opts.type](opts, log)).map((d) => {
       const e = enrich(d, key, opts.segment);
       const old = before.get(e.id);
       return { ...e, firstSeen: old ? old.firstSeen ?? null : before.size ? now : null };

@@ -5,6 +5,9 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.js",
     "crawl": "node --env-file-if-exists=.env src/crawl.js",
+    "start:sync": "node --env-file-if-exists=.env --env-file=.env.sync src/server.js",
+    "crawl:sync": "node --env-file-if-exists=.env --env-file=.env.sync src/crawl.js",
+    "clear:sync": "node --env-file-if-exists=.env --env-file=.env.sync scripts/clear-crawl-data.js",
     "postinstall": "playwright install chromium"
   },
   "keywords": [],
