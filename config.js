@@ -2,24 +2,25 @@
 export default {
   port: Number(process.env.PORT) || 3000,
 
-  // node-cron syntax. Default: every Wednesday at 06:00 (Helsinki time).
-  // e.g. CRON_SCHEDULE="0 6 * * 1,4" for Monday + Thursday when the weekly flyers start.
-  schedule: process.env.CRON_SCHEDULE || '0 6 * * 3',
+  // Automatic refresh, in node-cron syntax (Helsinki time). Off by default: the owner refreshes by
+  // hand. e.g. CRON_SCHEDULE="0 6 * * 3" for every Wednesday at 06:00.
+  schedule: process.env.CRON_SCHEDULE || null,
   timezone: 'Europe/Helsinki',
 
-  // Sections refreshed on their own schedule instead of the weekly one above (same syntax and
-  // timezone). Fast-food campaigns change often, so Food Promotions is refreshed every morning.
+  // Sections refreshed on their own schedule instead of the one above (same syntax and timezone;
+  // also off unless set), e.g. FOOD_CRON_SCHEDULE="0 9 * * *" for Food every morning.
   sectionSchedules: {
-    food: process.env.FOOD_CRON_SCHEDULE || '0 9 * * *',
+    food: process.env.FOOD_CRON_SCHEDULE || null,
   },
 
   // How many stores to crawl at the same time. Each K-Ruoka/Prisma crawl runs its own headless
   // browser, so lower this on a small machine. Default: all stores at once.
   concurrency: Number(process.env.CRAWL_CONCURRENCY) || 5,
 
-  // After a store is refreshed by hand, its Refresh buttons stay unavailable for this long, so
-  // repeated clicks can't hammer the store's website. The weekly schedule ignores it.
-  refreshCooldownMinutes: Number(process.env.REFRESH_COOLDOWN_MINUTES) || 10,
+  // After a store is refreshed by hand, its Refresh buttons can stay unavailable for this many
+  // minutes so repeated clicks don't hammer the store's website. Off (0) by default: only the owner
+  // refreshes. A schedule (if set) ignores it.
+  refreshCooldownMinutes: Number(process.env.REFRESH_COOLDOWN_MINUTES) || 0,
 
   // Per-IP request limits against bots (see src/rateLimit.js). Normal browsing stays far below.
   rateLimits: {

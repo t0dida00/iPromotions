@@ -116,7 +116,9 @@ function render(s) {
   const tiles = [
     ['Services online', `${healthy}<small>/${crawlable.length}</small>`, healthy === crawlable.length ? 'All crawlers healthy' : `${crawlable.length - healthy} need attention`, healthy === crawlable.length ? 'ok' : 'bad'],
     ['Latest refresh', s.updatedAt ? relative(s.updatedAt) : 'Never', fmtDate(s.updatedAt)],
-    ['Next refresh', s.schedule.nextRun ? relative(s.schedule.nextRun) : '—', `${fmtDate(s.schedule.nextRun)}<br>${s.schedule.label ? `${esc(s.schedule.label)}: ` : ''}${esc(describeCron(s.schedule.cron))}`],
+    s.schedule.cron
+      ? ['Next refresh', s.schedule.nextRun ? relative(s.schedule.nextRun) : '—', `${fmtDate(s.schedule.nextRun)}<br>${s.schedule.label ? `${esc(s.schedule.label)}: ` : ''}${esc(describeCron(s.schedule.cron))}`]
+      : ['Next refresh', 'Manual', 'Refreshed by the owner'],
     ['Deals tracked', s.totalDeals.toLocaleString('en-GB'), `across ${crawlable.length} stores`],
     ['Server uptime', uptime(s.server.startedAt), `since ${fmtDate(s.server.startedAt)}`],
   ];

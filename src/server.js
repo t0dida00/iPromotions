@@ -473,15 +473,15 @@ app.delete('/api/expiry/:id', requireUser, async (req, res) => {
 // Sidebar sections are real URLs; they all load the same page, which shows the matching section.
 app.get(['/dashboard', '/favorites', '/promotions', '/clothing', '/electronics', '/food', '/follow', '/privacy', '/terms', '/contact', '/pricing'], (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
-// Scheduled refreshes: sections in `sectionSchedules` (e.g. Food, daily) run on their own cron; the
-// main schedule (weekly) refreshes every other store. The first start still crawls everything, and
-// the cooldown only limits clicks.
-const ownSchedule = config.sectionSchedules ?? {};
+// Scheduled refreshes, off unless set in config.js (the owner refreshes by hand): sections in
+// `sectionSchedules` run on their own cron; the main schedule refreshes every other store. The
+// first start still crawls everything, and the cooldown only limits clicks.
+const ownSchedule = Object.fromEntries(Object.entries(config.sectionSchedules ?? {}).filter(([, expr]) => expr));
 const SECTION_NAMES = { groceries: 'Market Promotions', clothing: 'Cloth Promotions', electronics: 'Electronics Promotions', food: 'Food Promotions' };
 const schedules = [
   { label: Object.keys(ownSchedule).length ? 'Other sections' : null, cron: config.schedule, stores: () => crawlableStores().filter((k) => !ownSchedule[segmentOf(k)]) },
   ...Object.entries(ownSchedule).map(([seg, expr]) => ({ label: SECTION_NAMES[seg] ?? seg, cron: expr, stores: () => crawlableStores().filter((k) => segmentOf(k) === seg) })),
-].map((s) => ({
+].filter((s) => s.cron).map((s) => ({
   ...s,
   // On Vercel the schedules only report their next run (GitHub Actions does the crawling).
   task: cron.schedule(s.cron, ON_VERCEL ? () => {} : () => crawlAll(console.log, 'schedule', s.stores()).catch((e) => console.error('[cron]', e)), { timezone: config.timezone }),
@@ -494,7 +494,7 @@ function nextSchedule() {
     .filter((s) => s.at && s.stores().length)
     .sort((a, b) => a.at - b.at)[0];
   return {
-    cron: next?.cron ?? config.schedule,
+    cron: next?.cron ?? config.schedule, // null: no schedule, refreshed by hand
     label: next?.label ?? null,
     timezone: config.timezone,
     nextRun: next?.at.toISOString() ?? null,
@@ -529,7 +529,7 @@ async function startServer() {
   }
 
   app.listen(config.port, async () => {
-    console.log(`iPromotion running at http://localhost:${config.port} (crawl schedules: ${schedules.map((x) => `${x.label ?? "all"} "${x.cron}"`).join(", ")})`);
+    console.log(`iPromotion running at http://localhost:${config.port} (crawl schedules: ${schedules.map((x) => `${x.label ?? "all"} "${x.cron}"`).join(", ") || "none, refresh by hand"})`);
     if (await migrateLegacy()) console.log('Moved data/deals.json into per-section files (old file kept as deals.json.bak)');
     warmDeals();
     // First run: no data yet, so crawl right away.
