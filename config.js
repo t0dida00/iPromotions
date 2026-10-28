@@ -124,17 +124,6 @@ export default {
       // Prisma has no public weekly flyer page; S-kaupat's campaign page is the closest equivalent.
       brochureUrl: 'https://www.s-kaupat.fi/tuotteet/kampanjat',
     },
-    // S-market offers are mostly chain-wide; Herkku (city centre) adds ~60 deals Prisma doesn't have,
-    // the other Oulu S-markets only a handful more each (October 2026).
-    smarket: {
-      type: 'prisma',
-      enabled: true,
-      name: 'S-market',
-      label: 'S-market Herkku Oulu',
-      color: '#e2001a',
-      storeId: '720566314',
-      brochureUrl: 'https://www.s-kaupat.fi/tuotteet/kampanjat',
-    },
     // Lidl prices are national; crawls this week's campaign pages linked from lidl.fi.
     lidl: {
       type: 'lidl',

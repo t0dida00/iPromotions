@@ -18,19 +18,22 @@
 
 // ---------- the map ----------
 // Streets run along these lines (2 m wide); the blocks between them hold the shops. Columns: left
-// districts, the HQ/parking column, right districts. Rows: back and front districts.
+// districts, the HQ/parking column, right districts. Rows: back and front districts, then a front
+// row with Beauty & Health in the middle (in front of the parking lot) and a park on each side.
 const STREET_X = [-16, -4, 4, 16];
-const STREET_Z = [-6, 0, 6];
+const STREET_Z = [-6, 0, 6, 12];
 const ROAD_HALF = 1;
 const LANE = 0.45; // right-hand lane, from the street's centre line
 const SHOP_GAP = 2;
 
 const DISTRICTS = [
-  { segment: 'groceries', bot: 'Market bot', label: 'Market', color: 0x2e9e5b, col: 0, row: 0, spot: -2.1, page: '/promotions' },
-  { segment: 'clothing', bot: 'Cloth bot', label: 'Clothing', color: 0x8b5cf6, col: 2, row: 0, spot: 2.1, page: '/clothing' },
-  { segment: 'electronics', bot: 'Tech bot', label: 'Electronics', color: 0x3b82f6, col: 0, row: 1, spot: -0.7, page: '/electronics' },
-  { segment: 'food', bot: 'Food bot', label: 'Food', color: 0xe5484d, col: 2, row: 1, spot: 0.7, page: '/food' },
+  { segment: 'groceries', bot: 'Market bot', label: 'Supermarkets', color: 0x2e9e5b, col: 0, row: 0, spot: -2.3, page: '/promotions' },
+  { segment: 'clothing', bot: 'Cloth bot', label: 'Clothes', color: 0x8b5cf6, col: 2, row: 0, spot: 2.3, page: '/clothing' },
+  { segment: 'electronics', bot: 'Tech bot', label: 'Electronics', color: 0x3b82f6, col: 0, row: 1, spot: -1.15, page: '/electronics' },
+  { segment: 'beauty', bot: 'Beauty bot', label: 'Beauty & Health', color: 0xd9468f, col: 1, row: 2, spot: 0, page: '/beauty' },
+  { segment: 'food', bot: 'Food bot', label: 'Food', color: 0xe5484d, col: 2, row: 1, spot: 1.15, page: '/food' },
 ];
+const TOWN_Z = (STREET_Z[0] + STREET_Z.at(-1)) / 2 + 0.2; // where the camera looks: the town's middle
 const BOT_SCALE = 0.62;
 const CAR_SCALE = 1.15;
 const LOT_Z = 2.7; // parking spots in the front-centre block, noses to the street at z = 0
@@ -43,7 +46,9 @@ const coarse = matchMedia('(pointer: coarse)').matches;
 const damp = (a, b, lambda, dt) => a + (b - a) * (1 - Math.exp(-lambda * dt));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-// A block's area between streets: col 0..2, row 0..1.
+// A block's area between streets: col 0..2, row 0..2.
+const isDistrict = (col, row) => DISTRICTS.some((d) => d.col === col && d.row === row);
+const isPlaza = (col, row) => col === 1 && row < 2; // HQ (back) and the parking lot (front)
 const block = (col, row) => ({ x0: STREET_X[col] + ROAD_HALF, x1: STREET_X[col + 1] - ROAD_HALF, z0: STREET_Z[row] + ROAD_HALF, z1: STREET_Z[row + 1] - ROAD_HALF });
 
 // Street graph: crossings are nodes, street pieces between them are edges.
@@ -243,15 +248,16 @@ function buildStreets() {
   const grass = new THREE.MeshStandardMaterial({ color: 0x9fc48a, roughness: 1 });
   const lotMat = new THREE.MeshStandardMaterial({ color: 0x6d727c, roughness: 0.9 });
   for (let col = 0; col < 3; col++)
-    for (let row = 0; row < 2; row++) {
+    for (let row = 0; row < STREET_Z.length - 1; row++) {
       const b = block(col, row);
       const lot = col === 1 && row === 1;
+      const park = !isDistrict(col, row) && !isPlaza(col, row);
       const h = lot ? 0.02 : 0.12;
-      const slab = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0, h, b.z1 - b.z0), lot ? lotMat : pave);
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0, h, b.z1 - b.z0), lot ? lotMat : park ? grass : pave);
       slab.position.set((b.x0 + b.x1) / 2, h / 2, (b.z0 + b.z1) / 2);
       slab.receiveShadow = true;
       scene.add(slab);
-      if (col !== 1) {
+      if (isDistrict(col, row)) {
         const lawn = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0 - 0.6, 0.02, 1.2), grass);
         lawn.position.set((b.x0 + b.x1) / 2, 0.13, b.z0 + 0.9);
         lawn.receiveShadow = true;
@@ -310,10 +316,14 @@ function buildStreets() {
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x3f8f5a, roughness: 0.8 });
   const trees = [];
   for (let col = 0; col < 3; col++)
-    for (let row = 0; row < 2; row++) {
+    for (let row = 0; row < STREET_Z.length - 1; row++) {
       const b = block(col, row);
       if (col === 1 && row === 1) continue; // the parking lot
-      for (let x = b.x0 + 0.8; x <= b.x1 - 0.7; x += col === 1 ? 2.4 : 2) trees.push([x, b.z0 + 0.6]);
+      const step = col === 1 ? 2.4 : 2;
+      for (let x = b.x0 + 0.8; x <= b.x1 - 0.7; x += step) trees.push([x, b.z0 + 0.6]);
+      // Parks: a few more rows of trees, staggered.
+      if (!isDistrict(col, row) && !isPlaza(col, row))
+        for (let z = b.z0 + 2, k = 1; z <= b.z1 - 0.6; z += 1.6, k++) for (let x = b.x0 + 0.8 + (k % 2) * 1.2; x <= b.x1 - 0.7; x += 2.6) trees.push([x, z]);
     }
   for (const [x, z] of trees) {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.5, 8), trunkMat);
@@ -326,7 +336,7 @@ function buildStreets() {
   }
 }
 
-// HQ building at the back of the middle column, parking lot with four marked spots in front.
+// HQ building at the back of the middle column, parking lot with five marked spots in front.
 function buildPlaza() {
   const b = block(1, 0);
   const hq = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.9, 2), new THREE.MeshStandardMaterial({ color: 0x0f7b5f, roughness: 0.6 }));
@@ -355,24 +365,25 @@ function buildPlaza() {
   scene.add(hq, roof, sign, door);
   // Spot lines and a colour stripe per bot.
   const line = new THREE.MeshBasicMaterial({ color: 0xf4f1e8 });
-  for (const x of [-2.8, -1.4, 0, 1.4, 2.8]) {
+  for (const x of [-2.875, -1.725, -0.575, 0.575, 1.725, 2.875]) {
     const l = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.01, 1.9), line);
     l.position.set(x, 0.025, LOT_Z);
     scene.add(l);
   }
   for (const d of DISTRICTS) {
-    const s = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.01, 0.12), new THREE.MeshBasicMaterial({ color: d.color }));
+    const s = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.01, 0.12), new THREE.MeshBasicMaterial({ color: d.color }));
     s.position.set(d.spot, 0.025, LOT_Z + 0.9);
     scene.add(s);
   }
 }
 
-function buildShop(store, d, index) {
+function buildShop(store, d, index, count) {
   const b = block(d.col, d.row);
-  // Shops line the block's front edge, nearest the middle first, facing the street in front.
+  // Shops line the block's front edge, nearest the middle first, facing the street in front; in the
+  // middle column they are centred.
   const inner = d.col === 0 ? b.x1 : b.x0;
   const dir = d.col === 0 ? -1 : 1;
-  const x = inner + dir * (1 + index * SHOP_GAP);
+  const x = d.col === 1 ? (index - (count - 1) / 2) * SHOP_GAP : inner + dir * (1 + index * SHOP_GAP);
   const z = b.z1 - 1.05;
   const color = new THREE.Color(store.color ?? '#888');
   const g = new THREE.Group();
@@ -1034,9 +1045,9 @@ function resize() {
   // Back the camera off until the whole town fits this panel's shape; tall panels look more from above.
   camera.fov = 44;
   const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-  const d = Math.max(16.5 / (tanV * camera.aspect), 7.3 / tanV);
+  const d = Math.max(16.5 / (tanV * camera.aspect), 10.3 / tanV);
   const dir = camera.aspect < 1.6 ? new THREE.Vector3(0, 20, 12) : new THREE.Vector3(0, 11.5, 14.5);
-  camera.position.copy(controls?.target ?? new THREE.Vector3(0, 0, 0.2)).addScaledVector(dir.normalize(), d);
+  camera.position.copy(controls?.target ?? new THREE.Vector3(0, 0, TOWN_Z)).addScaledVector(dir.normalize(), d);
   camera.far = d + 40;
   camera.updateProjectionMatrix();
   controls?.update();
@@ -1091,7 +1102,7 @@ async function init() {
     const s = await firstStatus; // the store list comes from /api/status
     for (const d of DISTRICTS) {
       const list = s.stores.filter((x) => x.segment === d.segment && x.hasDeals);
-      list.forEach((store, i) => buildShop(store, d, i));
+      list.forEach((store, i) => buildShop(store, d, i, list.length));
       const blk = block(d.col, d.row);
       const sign = billboard(d.label, hex(d.color));
       sign.position.set((blk.x0 + blk.x1) / 2, 3.15, blk.z1 - 1.3); // above the district's shops and their logos
@@ -1104,7 +1115,7 @@ async function init() {
     lastStores = Object.fromEntries((s.stores ?? []).map((x) => [x.key, x.status]));
 
     controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 0, 0.2);
+    controls.target.set(0, 0, TOWN_Z);
     controls.enableDamping = true;
     controls.enablePan = false;
     controls.enableZoom = false; // the page scrolls with the wheel

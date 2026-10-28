@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es
 
-iPromotion (antes iBenefits) rastrea (crawl) las ofertas semanales de supermercados (Tokmanni, K-Ruoka, Prisma, S-market, Lidl),
+iPromotion (antes iBenefits) rastrea (crawl) las ofertas semanales de supermercados (Tokmanni, K-Ruoka, Prisma, Lidl),
 tiendas de ropa (XXL, Intersport, Stadium, KappAhl, New Yorker) y electrónica (Power,
 Verkkokauppa.com, Gigantti) y belleza/farmacia (KICKS, Yliopiston Apteekki) de la zona de Oulu, y las muestra en una sola web con filtros.
 Node.js (ESM, `"type": "module"`), Express 5, node-cron, cheerio y Playwright (Chromium).
@@ -85,7 +85,7 @@ historial de las últimas 20 ejecuciones y hora de actualización por sección. 
 convierte el antiguo `data/deals.json` único.
 
 **Crawlers:** dos estilos. HTTP plano + cheerio/JSON embebido (Tokmanni, Lidl, KappAhl, New Yorker, KICKS, Yliopiston Apteekki;
-Prisma y S-market llaman directamente a la API GraphQL de S-kaupat con `storeId` y el hash de la consulta
+Prisma llama directamente a la API GraphQL de S-kaupat con `storeId` y el hash de la consulta
 persistida `QUERY_HASH`, que hay que actualizar si S-kaupat la cambia) o Playwright vía `withBrowser()`
 de `src/browser.js`, que normalmente intercepta las llamadas a la API interna de la propia web en vez
 de parsear el DOM (K-Ruoka, Power, Verkkokauppa, Gigantti, XXL) o pulsa "cargar más" (Intersport, Stadium). Reutiliza `USER_AGENT`, `sleep` y
@@ -172,7 +172,7 @@ las categorías favoritas de todas las secciones, leyendo los `PromoView`. En es
 pliega a una columna de iconos (`.app.sidebar-collapsed`, guardado en localStorage y restaurado por un
 `<script>` en línea antes de pintar); en móvil sigue siendo el cajón deslizante. `dashboard.js` pinta `/api/status`. Encima de las tarjetas, `store3d.js` dibuja con three.js (CDN jsdelivr fijado en el
 import map de `index.html`, cargado solo al abrir el dashboard) un pueblo: cuadrícula de calles
-(`STREET_X`/`STREET_Z`, grafo de cruces), una manzana por sección (groceries, clothing, electronics y food; Beauty & Health aún no tiene manzana) con sus tiendas (escaparates con sus
+(`STREET_X`/`STREET_Z`, grafo de cruces), una manzana por sección con sus tiendas (Beauty & Health en la fila delantera, delante del parking, con un parque a cada lado) (escaparates con sus
 mejores ofertas reales de `GET /api/stores/top`, lámpara verde/ámbar según el último crawl), la HQ y un
 parking con 4 coches. Hay un robot procedural por sección: en un Refresh (`updateStore3d(status)` en cada
 sondeo) conduce por la ruta más corta (Dijkstra, carril derecho, gira en los cruces) a la tienda que se
