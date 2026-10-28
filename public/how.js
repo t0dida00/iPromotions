@@ -31,7 +31,7 @@ const NODES = {
   hf: { x: 625, y: 335, w: 210, h: 72, icon: 'sparkle', label: 'Hugging Face', sub: 'assistant · photo dates', external: true },
   wolt: { x: 625, y: 470, w: 210, h: 72, icon: 'globe', label: 'Wolt', sub: 'food offers near you', external: true },
   neon: { x: 250, y: 650, w: 300, h: 86, shape: 'cylinder', icon: 'db', label: 'Neon Postgres', sub: 'deals · users · favorites · checks' },
-  crawler: { x: 625, y: 675, w: 230, h: 72, stack: '×15', icon: 'robot', label: 'Crawlers', sub: 'Vercel functions' },
+  crawler: { x: 625, y: 675, w: 230, h: 72, stack: '×13', icon: 'robot', label: 'Crawlers', sub: 'Vercel functions' },
   stores: { x: 625, y: 840, w: 250, h: 72, icon: 'globe', label: 'Store websites', sub: 'Tokmanni, Prisma, Power…', external: true },
 };
 
@@ -102,7 +102,7 @@ const SCENARIOS = {
     label: 'Full crawl',
     steps: [
       { text: 'About once a week the owner presses Refresh all. Nothing runs on a schedule.', flows: {}, load: { crawler: 0.5 } },
-      { text: 'The crawlers read 15 store websites, mostly by opening a real browser and listening to the site’s own deal API. H&M, Lindex, McDonald’s and Subway are links only.', flows: { fetch: 7 }, load: { crawler: 0.8, stores: 0.6 } },
+      { text: 'The crawlers read 13 store websites, mostly by opening a real browser and listening to the site’s own deal API. K-Supermarket, K-Citymarket, H&M, Lindex, McDonald’s and Subway are links only.', flows: { fetch: 7 }, load: { crawler: 0.8, stores: 0.6 } },
       { text: 'The deals are written to Neon, one row per section. A store that fails keeps its previous deals and shows a ⚠ on its button.', flows: { fetch: 3, write: 5 }, load: { crawler: 0.55, stores: 0.3, neon: 0.5 } },
       { text: 'Within 5 seconds the API servers see the newer version and rebuild their memory once; the CDN has the new deals within a minute.', flows: { db: 2, miss: 1.5, visit: 3 }, load: { neon: 0.3, cache: 0.5, app: 0.25, cdn: 0.3 } },
     ],
@@ -205,7 +205,7 @@ function build() {
     .map(([id, e]) => `<path class="how-edge${e.async ? ' async' : ''}" data-edge="${id}" d="${edgePath(e)}" marker-end="url(#how-arrow)"/>`)
     .join('');
   root.querySelector('.how-canvas').innerHTML = `<svg class="how-svg" viewBox="0 0 760 910" role="img" aria-labelledby="how-svg-title">
-    <title id="how-svg-title">Diagram: visitors sign in with Firebase and reach Vercel's CDN, which passes cache misses to the API server (auto-scaling, with an in-memory cache inside). The server checks Neon Postgres for changes and calls Hugging Face (assistant, photo dates) and Wolt (live offers). Crawlers in Vercel functions, one per store and started by the owner's Refresh, read 15 store websites and write to Neon.</title>
+    <title id="how-svg-title">Diagram: visitors sign in with Firebase and reach Vercel's CDN, which passes cache misses to the API server (auto-scaling, with an in-memory cache inside). The server checks Neon Postgres for changes and calls Hugging Face (assistant, photo dates) and Wolt (live offers). Crawlers in Vercel functions, one per store and started by the owner's Refresh, read 13 store websites and write to Neon.</title>
     <defs><marker id="how-arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M2 2 10 6 2 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
     <g class="how-edges">${edges}</g>
     <g class="how-tags"></g>
