@@ -59,13 +59,13 @@ app.get('/api/health', async (_req, res) => {
 });
 // Stripe → us (src/billing.js): raw body for the signature check, and no rate limit (Stripe retries).
 app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }), stripeWebhook);
-app.use('/api', rateLimit({ name: 'api', ...limits.api }));
-app.use(rateLimit({ name: 'pages', ...limits.pages }));
-
 // no-cache = the browser re-checks (cheaply, via ETag) so an updated file is never stale, and an
-// unchanged one costs only an empty "304 Not Modified" reply.
+// unchanged one costs only an empty "304 Not Modified" reply. Served before the rate limits: a page
+// load asks for ~50 scripts, styles and logos, and a few reloads would otherwise hit the limit.
 const revalidate = (res) => res.setHeader('Cache-Control', 'no-cache');
 app.use(express.static(PUBLIC, { setHeaders: revalidate }));
+app.use('/api', rateLimit({ name: 'api', ...limits.api }));
+app.use(rateLimit({ name: 'pages', ...limits.pages }));
 // Firebase settings for Google sign-in in the browser: GET /api/auth-config.
 app.use(authRouter);
 app.use(favoritesRouter);

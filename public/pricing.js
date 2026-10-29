@@ -11,6 +11,7 @@ let root = null;
 let user = null;
 let info = null; // GET /api/plans
 let credits; // undefined = not loaded, null = not metered
+let creditsAt = 0;
 let notice = null; // { kind: ok|bad|info, text }
 let buying = null; // plan key while the payment page is being opened
 
@@ -26,6 +27,7 @@ async function loadCredits() {
   if (!user) return (credits = undefined);
   try {
     credits = (await api('/api/credits')).credits;
+    creditsAt = Date.now();
   } catch {
     credits = undefined;
   }
@@ -166,7 +168,8 @@ export async function showPricing() {
     notice = { kind: 'info', text: 'Payment cancelled. Nothing was charged.' };
   }
   render();
-  if (user) {
+  // Reopening the page within a few seconds reuses the balance (after a payment it's re-checked).
+  if (user && (params.has('paid') || Date.now() - creditsAt > 15_000)) {
     await loadCredits();
     render();
   }

@@ -626,7 +626,7 @@ export async function startCrawl(query = '', button = null) {
   else if (r.skipped?.length)
     toast(`Refreshing ${r.stores.map((k) => STORES[k]?.name ?? k).join(', ')} · skipped ${r.skipped.length} refreshed recently`);
   await load();
-  if (currentView === 'dashboard') showDashboard();
+  if (currentView === 'dashboard') showDashboard({ force: true }); // a refresh just started
 }
 document.addEventListener('ipromotion:crawl', (e) => startCrawl(e.detail));
 for (const btn of document.querySelectorAll('.crawl-btn'))

@@ -25,8 +25,8 @@ export default {
   // Per-IP request limits against bots (see src/rateLimit.js). Normal browsing stays far below.
   rateLimits: {
     crawl: { windowMs: 10 * 60_000, max: 5 }, // POST /api/crawl (Refresh buttons)
-    api: { windowMs: 60_000, max: 120 }, // other /api/* calls
-    pages: { windowMs: 60_000, max: 600 }, // pages, scripts, logos
+    api: { windowMs: 60_000, max: 300 }, // other /api/* calls
+    pages: { windowMs: 60_000, max: 600 }, // pages and /api calls (static files aren't counted)
     wolt: { windowMs: 10 * 60_000, max: 6 }, // Wolt lookups for a new location (each opens Chromium)
     scan: { windowMs: 10 * 60_000, max: 30 }, // expiry-date photo checks (each calls the vision model)
     checkout: { windowMs: 10 * 60_000, max: 10 }, // opening a Stripe payment page

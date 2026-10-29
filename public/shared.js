@@ -10,6 +10,8 @@ let dialog = null;
 let posts = null; // null until loaded
 let loadError = null;
 let signedIn = false;
+let loadedAt = 0; // reopening the page within FRESH_MS reuses the posts
+const FRESH_MS = 15_000;
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const euro = (n) => (n == null ? '' : `${Number(n).toFixed(2).replace('.', ',')} €`);
@@ -54,6 +56,7 @@ async function load() {
     const r = await api('/api/shared');
     posts = r.posts;
     loadError = null;
+    loadedAt = Date.now();
   } catch (e) {
     loadError = e.message;
   }
@@ -267,5 +270,6 @@ export function mountShared(section) {
 }
 
 export function showShared() {
-  load();
+  if (posts != null && Date.now() - loadedAt < FRESH_MS) render();
+  else load();
 }

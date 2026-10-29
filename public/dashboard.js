@@ -32,6 +32,7 @@ let timer = null;
 const RUNS_PER_PAGE = 10;
 let runsPage = 0;
 let last = null;
+let lastAt = 0; // when `last` arrived; reopening the dashboard within 10 s reuses it
 
 // "Refresh section" buttons ask app.js to start the crawl, so the whole page shows it as busy.
 document.getElementById('dash').addEventListener('click', (e) => {
@@ -48,10 +49,11 @@ document.getElementById('dash').addEventListener('click', (e) => {
   document.dispatchEvent(new CustomEvent('ipromotion:crawl', { detail: `?segment=${encodeURIComponent(b.dataset.refreshSeg)}` }));
 });
 
-export function showDashboard() {
+export function showDashboard({ force = false } = {}) {
   clearTimeout(timer);
   showStore3d();
-  refresh();
+  if (!force && last && !last.crawling && Date.now() - lastAt < 10_000) render(last);
+  else refresh();
 }
 
 // "Find all discounts" in the 3D town: redraw so the banner and status pills follow the robots.
@@ -77,7 +79,9 @@ async function refresh() {
       timer = setTimeout(refresh, (Number(res.headers.get('Retry-After')) || 30) * 1000);
       return;
     }
-    render(await res.json());
+    const s = await res.json();
+    lastAt = Date.now();
+    render(s);
   } catch {
     document.getElementById('dash').innerHTML = '<p class="hint">Could not reach the server.</p>';
   }
