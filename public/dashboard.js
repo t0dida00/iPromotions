@@ -113,15 +113,17 @@ function render(s) {
           .join(', ')}. Their previous deals are still shown.${owner ? '' : ' If this keeps happening, please <a href="/contact" data-view-link>contact the admin</a>.'}</span></div>`
       : '';
 
+  // Next refresh, server uptime and the refresh history are for the owner only (html.is-owner).
+  const isOwner = document.documentElement.classList.contains('is-owner');
   const tiles = [
     ['Services online', `${healthy}<small>/${crawlable.length}</small>`, healthy === crawlable.length ? 'All crawlers healthy' : `${crawlable.length - healthy} need attention`, healthy === crawlable.length ? 'ok' : 'bad'],
     ['Latest refresh', s.updatedAt ? relative(s.updatedAt) : 'Never', fmtDate(s.updatedAt)],
-    s.schedule.cron
+    isOwner && (s.schedule.cron
       ? ['Next refresh', s.schedule.nextRun ? relative(s.schedule.nextRun) : '—', `${fmtDate(s.schedule.nextRun)}<br>${s.schedule.label ? `${esc(s.schedule.label)}: ` : ''}${esc(describeCron(s.schedule.cron))}`]
-      : ['Next refresh', 'Manual', 'Refreshed by the owner'],
+      : ['Next refresh', 'Manual', 'Refreshed by the owner']),
     ['Deals tracked', s.totalDeals.toLocaleString('en-GB'), `across ${crawlable.length} stores`],
-    ['Server uptime', uptime(s.server.startedAt), `since ${fmtDate(s.server.startedAt)}`],
-  ];
+    isOwner && ['Server uptime', uptime(s.server.startedAt), `since ${fmtDate(s.server.startedAt)}`],
+  ].filter(Boolean);
 
   // A failed store. The owner gets what went wrong in plain words plus the raw error; the server
   // sends the error only to the owner, so everyone else gets a short note and a contact link.
@@ -218,12 +220,12 @@ function render(s) {
       <tbody>${services}</tbody>
     </table></div>
 
-    <h2>Refresh history</h2>
+    ${isOwner ? `<h2>Refresh history</h2>
     <div class="table-wrap"><table class="dtable">
       <thead><tr><th>Started</th><th>Triggered by</th><th class="num">Took</th><th class="num">Deals</th><th>Result</th></tr></thead>
       <tbody>${runs}</tbody>
     </table></div>
-    ${pager}`;
+    ${pager}` : ''}`;
 
   // Poll quickly while a crawl runs, otherwise just keep the relative times fresh.
   timer = setTimeout(refresh, c ? 3000 : 30000);
